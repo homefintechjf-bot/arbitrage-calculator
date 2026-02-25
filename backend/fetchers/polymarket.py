@@ -1,86 +1,105 @@
 import httpx
 import logging
+import json
 from typing import List, Dict, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com"
+PAGE_SIZE = 100
+MAX_PAGES = 30
 
-async def fetch_polymarket_markets(limit: int = 100) -> List[Dict[str, Any]]:
+
+async def fetch_polymarket_markets(limit: int = 3000) -> List[Dict[str, Any]]:
     markets = []
+    offset = 0
+    pages_fetched = 0
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            params = {
-                "limit": limit,
-                "active": True,
-                "closed": False,
-                "order": "volume",
-                "ascending": False,
-            }
-            resp = await client.get(f"{POLYMARKET_GAMMA_API}/markets", params=params)
-            resp.raise_for_status()
-            raw_markets = resp.json()
+            while len(markets) < limit and pages_fetched < MAX_PAGES:
+                params = {
+                    "limit": PAGE_SIZE,
+                    "offset": offset,
+                    "active": True,
+                    "closed": False,
+                    "order": "volume",
+                    "ascending": False,
+                }
+                resp = await client.get(f"{POLYMARKET_GAMMA_API}/markets", params=params)
+                resp.raise_for_status()
+                raw_markets = resp.json()
 
-            for m in raw_markets:
-                try:
-                    outcomes = []
-                    outcome_prices = m.get("outcomePrices", "")
-                    outcome_labels = m.get("outcomes", "")
+                if not raw_markets:
+                    break
 
-                    if isinstance(outcome_prices, str) and outcome_prices:
-                        import json
-                        prices = json.loads(outcome_prices)
-                        labels = json.loads(outcome_labels) if isinstance(outcome_labels, str) else outcome_labels
-                    elif isinstance(outcome_prices, list):
-                        prices = outcome_prices
-                        labels = outcome_labels if isinstance(outcome_labels, list) else []
-                    else:
-                        prices = []
-                        labels = []
-
-                    yes_price = float(prices[0]) if len(prices) > 0 else 0.5
-                    no_price = float(prices[1]) if len(prices) > 1 else 1.0 - yes_price
-
-                    for i, label in enumerate(labels):
-                        price = float(prices[i]) if i < len(prices) else 0.5
-                        outcomes.append({
-                            "label": label,
-                            "yesPrice": price,
-                            "noPrice": 1.0 - price,
-                            "volume": 0,
-                        })
-
-                    volume_str = m.get("volume", "0")
+                for m in raw_markets:
                     try:
-                        volume = float(volume_str) if volume_str else 0
-                    except (ValueError, TypeError):
-                        volume = 0
+                        outcomes = []
+                        outcome_prices = m.get("outcomePrices", "")
+                        outcome_labels = m.get("outcomes", "")
 
-                    market_url = f"https://polymarket.com/event/{m.get('slug', '')}" if m.get("slug") else None
+                        if isinstance(outcome_prices, str) and outcome_prices:
+                            prices = json.loads(outcome_prices)
+                            labels = json.loads(outcome_labels) if isinstance(outcome_labels, str) else outcome_labels
+                        elif isinstance(outcome_prices, list):
+                            prices = outcome_prices
+                            labels = outcome_labels if isinstance(outcome_labels, list) else []
+                        else:
+                            prices = []
+                            labels = []
 
-                    market = {
-                        "id": f"poly_{m.get('id', '')}",
-                        "platform": "Polymarket",
-                        "title": m.get("question", m.get("title", "Unknown")),
-                        "category": m.get("groupItemTitle", m.get("category", "")),
-                        "yesPrice": yes_price,
-                        "noPrice": no_price,
-                        "volume": volume,
-                        "lastUpdated": datetime.utcnow().isoformat(),
-                        "endDate": m.get("endDate", None),
-                        "marketUrl": market_url,
-                        "isBinary": len(outcomes) <= 2,
-                        "outcomeCount": max(len(outcomes), 2),
-                        "contractLabel": labels[0] if labels else "Yes",
-                        "outcomes": outcomes if len(outcomes) > 2 else None,
-                    }
-                    markets.append(market)
-                except Exception as e:
-                    logger.warning(f"Skipping Polymarket market: {e}")
-                    continue
+                        yes_price = float(prices[0]) if len(prices) > 0 else 0.5
+                        no_price = float(prices[1]) if len(prices) > 1 else 1.0 - yes_price
+
+                        for i, label in enumerate(labels):
+                            price = float(prices[i]) if i < len(prices) else 0.5
+                            outcomes.append({
+                                "label": label,
+                                "yesPrice": price,
+                                "noPrice": 1.0 - price,
+                                "volume": 0,
+                            })
+
+                        volume_str = m.get("volume", "0")
+                        try:
+                            volume = float(volume_str) if volume_str else 0
+                        except (ValueError, TypeError):
+                            volume = 0
+
+                        market_url = f"https://polymarket.com/event/{m.get('slug', '')}" if m.get("slug") else None
+
+                        market = {
+                            "id": f"poly_{m.get('id', '')}",
+                            "platform": "Polymarket",
+                            "title": m.get("question", m.get("title", "Unknown")),
+                            "category": m.get("groupItemTitle", m.get("category", "")),
+                            "yesPrice": yes_price,
+                            "noPrice": no_price,
+                            "volume": volume,
+                            "lastUpdated": datetime.utcnow().isoformat(),
+                            "endDate": m.get("endDate", None),
+                            "marketUrl": market_url,
+                            "isBinary": len(outcomes) <= 2,
+                            "outcomeCount": max(len(outcomes), 2),
+                            "contractLabel": labels[0] if labels else "Yes",
+                            "outcomes": outcomes if len(outcomes) > 2 else None,
+                        }
+                        markets.append(market)
+                    except Exception as e:
+                        logger.warning(f"Skipping Polymarket market: {e}")
+                        continue
+
+                pages_fetched += 1
+                offset += PAGE_SIZE
+                logger.info(f"Polymarket page {pages_fetched}: fetched {len(raw_markets)} markets (total: {len(markets)})")
+
+                if len(raw_markets) < PAGE_SIZE:
+                    break
 
     except Exception as e:
         logger.error(f"Polymarket fetch error: {e}")
 
+    logger.info(f"Polymarket total: {len(markets)} markets from {pages_fetched} pages")
     return markets

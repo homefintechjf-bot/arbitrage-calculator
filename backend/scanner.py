@@ -55,19 +55,24 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
     scan_state["phase"] = "Fetching markets"
     scan_state["message"] = "Starting scan..."
     scan_state["status"] = "scanning"
+    scan_state["total_comparisons"] = 0
+    scan_state["completed_comparisons"] = 0
+    scan_state["pairs_found"] = 0
 
     try:
-        scan_state["progress"] = 10
-        scan_state["message"] = "Fetching Polymarket data..."
-        poly_markets = await fetch_polymarket_markets(limit=100)
+        scan_state["progress"] = 5
+        scan_state["phase"] = "Fetching Polymarket"
+        scan_state["message"] = "Fetching Polymarket markets (paginating)..."
+        poly_markets = await fetch_polymarket_markets(limit=3000)
 
-        scan_state["progress"] = 40
+        scan_state["progress"] = 35
         scan_state["message"] = f"Got {len(poly_markets)} Polymarket markets. Fetching PredictIt..."
+        scan_state["phase"] = "Fetching PredictIt"
         pi_markets = await fetch_predictit_markets()
 
-        scan_state["progress"] = 70
-        scan_state["message"] = f"Got {len(pi_markets)} PredictIt markets. Matching & grouping..."
-        scan_state["phase"] = "Matching markets"
+        scan_state["progress"] = 50
+        scan_state["message"] = f"Got {len(poly_markets)} Polymarket + {len(pi_markets)} PredictIt. Saving to DB..."
+        scan_state["phase"] = "Saving markets"
 
         all_markets = poly_markets + pi_markets
         _all_markets = all_markets
@@ -96,14 +101,14 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
         finally:
             await db.close()
 
-        scan_state["progress"] = 70
+        scan_state["progress"] = 60
         scan_state["phase"] = "Comparing markets"
         scan_state["message"] = "Computing 2-leg arbitrage pairs..."
 
         def on_match_progress(completed: int, total: int, pairs_found: int):
             if total > 0:
                 match_pct = completed / total
-                scan_state["progress"] = 70 + int(match_pct * 25)
+                scan_state["progress"] = 60 + int(match_pct * 35)
             scan_state["total_comparisons"] = total
             scan_state["completed_comparisons"] = completed
             scan_state["pairs_found"] = pairs_found

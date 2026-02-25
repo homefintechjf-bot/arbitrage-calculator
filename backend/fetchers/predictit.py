@@ -31,6 +31,8 @@ async def fetch_predictit_markets() -> List[Dict[str, Any]]:
                         no_price = 1.0 - yes_price
 
                         market_id = contract.get("id", "")
+                        contract_url = contract.get("url") or m.get("url")
+
                         market = {
                             "id": f"pi_{market_id}",
                             "platform": "PredictIt",
@@ -41,9 +43,9 @@ async def fetch_predictit_markets() -> List[Dict[str, Any]]:
                             "volume": 0,
                             "lastUpdated": datetime.utcnow().isoformat(),
                             "endDate": m.get("dateEnd", None),
-                            "marketUrl": m.get("url", None),
-                            "isBinary": len(contracts) <= 2,
-                            "outcomeCount": len(contracts) if len(contracts) > 2 else 2,
+                            "marketUrl": contract_url,
+                            "isBinary": True,
+                            "outcomeCount": 2,
                             "contractLabel": contract.get("shortName", contract.get("name", "Yes")),
                             "outcomes": None,
                         }

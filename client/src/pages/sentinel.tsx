@@ -32,9 +32,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 // Available platforms with their fee structures
 const PLATFORMS = [
-  { id: "kalshi", name: "Kalshi", feeType: "Sliding", description: "Best for economic data" },
-  { id: "polymarket", name: "Polymarket", feeType: "Low-Fixed", description: "Best for sports/crypto" },
-  { id: "predictit", name: "PredictIt", feeType: "Profit-Cut", description: "Higher fees, less sharp users" },
+  { id: "kalshi", name: "Kalshi", feeType: "Taker 7%·p·(1-p)", description: "Best for economic data" },
+  { id: "polymarket", name: "Polymarket", feeType: "Taker 0.10%", description: "Best for sports/crypto" },
+  { id: "predictit", name: "PredictIt", feeType: "10% profit + 5% withdraw", description: "Higher fees, less sharp users" },
   { id: "ibkr", name: "IBKR Forecast", feeType: "Institutional", description: "Most reliable pricing" },
 ];
 
@@ -66,20 +66,16 @@ function calculatePlatformFee(platform: string, price: number, contracts: number
   const platformLower = platform.toLowerCase();
   
   if (platformLower === "kalshi") {
-    // Kalshi: Sliding scale 0.07 * price * (1-price) per contract
-    // Only applies to Taker orders
     if (mode === "Maker") return 0;
     return 0.07 * price * (1 - price) * contracts;
   } else if (platformLower === "polymarket") {
-    // Polymarket: 0.01% taker fee on trade value
-    // For event markets, effectively 0; for crypto markets, 0.01%
-    return (price * contracts) * 0.0001;
+    if (mode === "Maker") return 0;
+    return price * contracts * 0.001;
   } else if (platformLower === "predictit") {
-    // PredictIt: 10% of PROFIT (winnings minus cost)
-    // Profit per contract = (1 - price), fee = 10% of that
-    return (1.0 - price) * contracts * 0.10;
+    const profitFee = (1.0 - price) * contracts * 0.10;
+    const withdrawalFee = (1.0 - price) * contracts * 0.05;
+    return profitFee + withdrawalFee;
   } else if (platformLower === "ibkr" || platformLower === "ibkr forecast") {
-    // IBKR: $0.01 per contract flat fee
     return contracts * 0.01;
   }
   return 0;

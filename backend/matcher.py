@@ -57,7 +57,11 @@ def estimate_fee(platform: str, price: float) -> float:
     if p == "kalshi":
         return 0.07 * price * (1 - price)
     elif p == "predictit":
-        return max(0, (1.0 - price)) * 0.10
+        profit_fee = max(0, (1.0 - price)) * 0.10
+        withdrawal_fee = max(0, (1.0 - price)) * 0.05
+        return profit_fee + withdrawal_fee
+    elif p == "polymarket":
+        return price * 0.001
     return 0.0
 
 

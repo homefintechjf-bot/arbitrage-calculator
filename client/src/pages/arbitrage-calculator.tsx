@@ -139,17 +139,16 @@ export default function ArbitrageCalculator() {
     const platformLower = platform.toLowerCase();
     
     if (platformLower === "kalshi") {
-      // Kalshi: Sliding scale 0.07 * price * (1-price) per contract (Taker only)
       if (mode === "Maker") return 0;
       return 0.07 * price * (1 - price) * contracts;
     } else if (platformLower === "polymarket") {
-      // Polymarket: Effectively 0% for event markets
-      return 0;
+      if (mode === "Maker") return 0;
+      return price * contracts * 0.001;
     } else if (platformLower === "predictit") {
-      // PredictIt: 10% of PROFIT (winnings minus cost)
-      return (1.0 - price) * contracts * 0.10;
+      const profitFee = (1.0 - price) * contracts * 0.10;
+      const withdrawalFee = (1.0 - price) * contracts * 0.05;
+      return profitFee + withdrawalFee;
     } else if (platformLower.includes("ibkr") || platformLower.includes("forecastex")) {
-      // IBKR ForecastEx: $0.01 exchange fee per contract (built into spread, but we account for it)
       return 0.01 * contracts;
     }
     return 0;
@@ -670,7 +669,7 @@ export default function ArbitrageCalculator() {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>PredictIt Warning</AlertTitle>
             <AlertDescription>
-              PredictIt charges 10% fees on profits and 5% on withdrawals. These are not factored into this calculator.
+              PredictIt charges 10% fees on profits and 5% on withdrawals. Both fees are factored into all ROI calculations.
             </AlertDescription>
           </Alert>
         )}

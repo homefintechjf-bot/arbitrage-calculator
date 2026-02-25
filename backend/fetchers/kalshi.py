@@ -85,8 +85,18 @@ async def fetch_kalshi_markets(limit: int = 50000) -> List[Dict[str, Any]]:
                 if cursor:
                     params["cursor"] = cursor
 
-                resp = await client.get(f"{KALSHI_API}/markets", params=params)
-                resp.raise_for_status()
+                for attempt in range(3):
+                    resp = await client.get(f"{KALSHI_API}/markets", params=params)
+                    if resp.status_code == 429:
+                        wait = 2 ** (attempt + 1)
+                        logger.warning(f"Kalshi rate limited, waiting {wait}s (attempt {attempt+1}/3)")
+                        await asyncio.sleep(wait)
+                        continue
+                    resp.raise_for_status()
+                    break
+                else:
+                    logger.error("Kalshi rate limit exceeded after 3 retries, stopping pagination")
+                    break
                 data = resp.json()
 
                 raw_markets = data.get("markets", [])
@@ -111,8 +121,10 @@ async def fetch_kalshi_markets(limit: int = 50000) -> List[Dict[str, Any]]:
                 if not cursor or len(raw_markets) < PAGE_SIZE:
                     break
 
-                if pages_fetched % 50 == 0:
-                    await asyncio.sleep(0.5)
+                if pages_fetched % 10 == 0:
+                    await asyncio.sleep(1.0)
+                else:
+                    await asyncio.sleep(0.15)
 
     except Exception as e:
         logger.error(f"Kalshi fetch error: {e}")

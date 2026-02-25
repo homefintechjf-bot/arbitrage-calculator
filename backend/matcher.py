@@ -1,5 +1,6 @@
 import re
 import logging
+from collections import defaultdict
 from typing import List, Dict, Any, Tuple
 from difflib import SequenceMatcher
 
@@ -11,6 +12,7 @@ STOP_WORDS = {
     "do", "does", "did", "has", "have", "had", "was", "were", "been",
     "can", "could", "would", "should", "may", "might", "shall",
     "before", "after", "during", "between", "from", "into", "about",
+    "yes", "no", "market", "contract", "event", "question",
 }
 
 
@@ -96,6 +98,15 @@ def compute_pair_arb(market_a: Dict, market_b: Dict) -> Dict[str, Any]:
         return {"roi": roi2, "cost": total2, "grossCost": cost2, "fees": fee2_a + fee2_b, "legs": legs, "scenario": 2}
 
 
+def _build_keyword_index(markets: List[Dict[str, Any]]) -> Dict[str, List[int]]:
+    index = defaultdict(list)
+    for i, m in enumerate(markets):
+        keywords = extract_keywords(m["title"])
+        for kw in keywords:
+            index[kw].append(i)
+    return index
+
+
 def find_arbitrage_pairs(
     markets: List[Dict[str, Any]],
     min_similarity: float = 40.0,
@@ -113,55 +124,81 @@ def find_arbitrage_pairs(
         by_platform.setdefault(m["platform"], []).append(m)
 
     platforms = list(by_platform.keys())
-    pairs = []
 
-    total_comparisons = 0
+    total_brute = 0
     for i in range(len(platforms)):
         for j in range(i + 1, len(platforms)):
-            total_comparisons += len(by_platform[platforms[i]]) * len(by_platform[platforms[j]])
+            total_brute += len(by_platform[platforms[i]]) * len(by_platform[platforms[j]])
+    
+    logger.info(f"Matcher: {len(platforms)} platforms, {sum(len(v) for v in by_platform.values())} markets, {total_brute:,} brute-force pairs")
+    logger.info(f"Using keyword index to reduce comparisons...")
+
+    candidate_pairs = set()
+    for i in range(len(platforms)):
+        for j in range(i + 1, len(platforms)):
+            pa, pb = platforms[i], platforms[j]
+            markets_a = by_platform[pa]
+            markets_b = by_platform[pb]
+
+            kw_index_b = defaultdict(list)
+            for idx_b, mb in enumerate(markets_b):
+                for kw in extract_keywords(mb["title"]):
+                    kw_index_b[kw].append(idx_b)
+
+            for idx_a, ma in enumerate(markets_a):
+                keywords_a = extract_keywords(ma["title"])
+                matched_b_indices = set()
+                for kw in keywords_a:
+                    if kw in kw_index_b:
+                        matched_b_indices.update(kw_index_b[kw])
+                for idx_b in matched_b_indices:
+                    candidate_pairs.add((pa, pb, idx_a, idx_b))
+
+    total_comparisons = len(candidate_pairs)
+    logger.info(f"Keyword index reduced to {total_comparisons:,} candidate pairs (from {total_brute:,})")
 
     if on_progress:
         on_progress(0, total_comparisons, 0)
 
+    pairs = []
     completed = 0
 
-    for i in range(len(platforms)):
-        for j in range(i + 1, len(platforms)):
-            pa, pb = platforms[i], platforms[j]
-            for ma in by_platform[pa]:
-                for mb in by_platform[pb]:
-                    completed += 1
-                    sim_score, reason = compute_similarity(ma["title"], mb["title"])
-                    if sim_score < min_similarity:
-                        if on_progress and completed % 50 == 0:
-                            on_progress(completed, total_comparisons, len(pairs))
-                        continue
+    for pa, pb, idx_a, idx_b in candidate_pairs:
+        ma = by_platform[pa][idx_a]
+        mb = by_platform[pb][idx_b]
+        completed += 1
 
-                    arb = compute_pair_arb(ma, mb)
+        sim_score, reason = compute_similarity(ma["title"], mb["title"])
+        if sim_score < min_similarity:
+            if on_progress and completed % 200 == 0:
+                on_progress(completed, total_comparisons, len(pairs))
+            continue
 
-                    end_dates = [d for d in [ma.get("endDate"), mb.get("endDate")] if d]
-                    earliest_resolution = min(end_dates) if end_dates else None
+        arb = compute_pair_arb(ma, mb)
 
-                    pair = {
-                        "comboType": "pair",
-                        "legCount": 2,
-                        "legs": arb["legs"],
-                        "marketA": ma,
-                        "marketB": mb,
-                        "combinedYesCost": round(arb["grossCost"], 4),
-                        "totalCost": round(arb["cost"], 4),
-                        "fees": round(arb["fees"], 4),
-                        "potentialProfit": round(max(0, 1.0 - arb["cost"]), 4),
-                        "roi": round(arb["roi"], 2),
-                        "matchScore": round(sim_score, 1),
-                        "matchReason": reason,
-                        "earliestResolution": earliest_resolution,
-                        "scenario": arb["scenario"],
-                    }
-                    pairs.append(pair)
+        end_dates = [d for d in [ma.get("endDate"), mb.get("endDate")] if d]
+        earliest_resolution = min(end_dates) if end_dates else None
 
-                    if on_progress and completed % 50 == 0:
-                        on_progress(completed, total_comparisons, len(pairs))
+        pair = {
+            "comboType": "pair",
+            "legCount": 2,
+            "legs": arb["legs"],
+            "marketA": ma,
+            "marketB": mb,
+            "combinedYesCost": round(arb["grossCost"], 4),
+            "totalCost": round(arb["cost"], 4),
+            "fees": round(arb["fees"], 4),
+            "potentialProfit": round(max(0, 1.0 - arb["cost"]), 4),
+            "roi": round(arb["roi"], 2),
+            "matchScore": round(sim_score, 1),
+            "matchReason": reason,
+            "earliestResolution": earliest_resolution,
+            "scenario": arb["scenario"],
+        }
+        pairs.append(pair)
+
+        if on_progress and completed % 200 == 0:
+            on_progress(completed, total_comparisons, len(pairs))
 
     if on_progress:
         on_progress(total_comparisons, total_comparisons, len(pairs))

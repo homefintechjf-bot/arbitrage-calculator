@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from backend.database import get_db
 from backend.fetchers.polymarket import fetch_polymarket_markets
 from backend.fetchers.predictit import fetch_predictit_markets
+from backend.fetchers.kalshi import fetch_kalshi_markets
 from backend.matcher import find_arbitrage_pairs
 
 logger = logging.getLogger(__name__)
@@ -60,21 +61,26 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
     scan_state["pairs_found"] = 0
 
     try:
-        scan_state["progress"] = 5
+        scan_state["progress"] = 3
+        scan_state["phase"] = "Fetching Kalshi"
+        scan_state["message"] = "Fetching Kalshi markets (paginating)..."
+        kalshi_markets = await fetch_kalshi_markets(limit=5000)
+
+        scan_state["progress"] = 20
         scan_state["phase"] = "Fetching Polymarket"
-        scan_state["message"] = "Fetching Polymarket markets (paginating)..."
+        scan_state["message"] = f"Got {len(kalshi_markets)} Kalshi markets. Fetching Polymarket..."
         poly_markets = await fetch_polymarket_markets(limit=3000)
 
-        scan_state["progress"] = 35
+        scan_state["progress"] = 40
         scan_state["message"] = f"Got {len(poly_markets)} Polymarket markets. Fetching PredictIt..."
         scan_state["phase"] = "Fetching PredictIt"
         pi_markets = await fetch_predictit_markets()
 
-        scan_state["progress"] = 50
-        scan_state["message"] = f"Got {len(poly_markets)} Polymarket + {len(pi_markets)} PredictIt. Saving to DB..."
+        scan_state["progress"] = 45
+        scan_state["message"] = f"Got {len(kalshi_markets)} Kalshi + {len(poly_markets)} Polymarket + {len(pi_markets)} PredictIt. Saving to DB..."
         scan_state["phase"] = "Saving markets"
 
-        all_markets = poly_markets + pi_markets
+        all_markets = kalshi_markets + poly_markets + pi_markets
         _all_markets = all_markets
         scan_state["total_markets"] = len(all_markets)
 
@@ -101,20 +107,20 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
         finally:
             await db.close()
 
-        scan_state["progress"] = 60
+        scan_state["progress"] = 55
         scan_state["phase"] = "Comparing markets"
-        scan_state["message"] = "Computing 2-leg arbitrage pairs..."
+        scan_state["message"] = "Computing 2-leg arbitrage pairs across all platforms..."
 
         def on_match_progress(completed: int, total: int, pairs_found: int):
             if total > 0:
                 match_pct = completed / total
-                scan_state["progress"] = 60 + int(match_pct * 35)
+                scan_state["progress"] = 55 + int(match_pct * 40)
             scan_state["total_comparisons"] = total
             scan_state["completed_comparisons"] = completed
             scan_state["pairs_found"] = pairs_found
             scan_state["message"] = f"Compared {completed:,}/{total:,} pairs — {pairs_found} matches found"
 
-        effective_platforms = platforms or ["Polymarket", "PredictIt"]
+        effective_platforms = platforms or ["Kalshi", "Polymarket", "PredictIt"]
         opportunities = find_arbitrage_pairs(all_markets, min_similarity=35.0, enabled_platforms=effective_platforms, on_progress=on_match_progress)
         _all_opportunities = opportunities
 
@@ -124,7 +130,7 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
 
         db = await get_db()
         try:
-            for opp in opportunities[:100]:
+            for opp in opportunities[:200]:
                 legs_json = json.dumps(opp.get("legs", []))
                 await db.execute(
                     """INSERT OR REPLACE INTO matched_pairs
@@ -169,6 +175,7 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
             "status": "complete",
             "totalMarkets": len(all_markets),
             "totalOpportunities": len(opportunities),
+            "kalshi": len(kalshi_markets),
             "polymarket": len(poly_markets),
             "predictit": len(pi_markets),
         }

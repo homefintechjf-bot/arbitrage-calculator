@@ -1,0 +1,140 @@
+import aiosqlite
+import os
+import json
+from datetime import datetime
+
+DB_PATH = os.path.join(os.path.dirname(__file__), "arbitrage.db")
+
+async def get_db():
+    db = await aiosqlite.connect(DB_PATH)
+    db.row_factory = aiosqlite.Row
+    return db
+
+async def init_db():
+    db = await get_db()
+    try:
+        await db.executescript("""
+            CREATE TABLE IF NOT EXISTS markets (
+                id TEXT PRIMARY KEY,
+                platform TEXT NOT NULL,
+                title TEXT NOT NULL,
+                category TEXT,
+                yes_price REAL NOT NULL DEFAULT 0.5,
+                no_price REAL NOT NULL DEFAULT 0.5,
+                volume REAL DEFAULT 0,
+                last_updated TEXT,
+                end_date TEXT,
+                market_url TEXT,
+                is_binary INTEGER DEFAULT 1,
+                outcome_count INTEGER DEFAULT 2,
+                contract_label TEXT,
+                outcomes_json TEXT,
+                fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS matched_pairs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_a_id TEXT NOT NULL,
+                market_b_id TEXT NOT NULL,
+                match_score REAL NOT NULL DEFAULT 0,
+                match_reason TEXT,
+                combined_yes_cost REAL,
+                potential_profit REAL,
+                roi REAL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (market_a_id) REFERENCES markets(id),
+                FOREIGN KEY (market_b_id) REFERENCES markets(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_a_id TEXT NOT NULL,
+                market_a_title TEXT,
+                market_a_platform TEXT,
+                market_b_id TEXT NOT NULL,
+                market_b_title TEXT,
+                market_b_platform TEXT,
+                match_score REAL,
+                match_reason TEXT,
+                verdict TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS alert_history (
+                id TEXT PRIMARY KEY,
+                watchlist_id TEXT,
+                market_name TEXT NOT NULL,
+                maker_roi REAL NOT NULL DEFAULT 0,
+                taker_roi REAL NOT NULL DEFAULT 0,
+                site_a_yes_price REAL,
+                site_b_yes_price REAL,
+                is_read INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS embeddings_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text_input TEXT NOT NULL UNIQUE,
+                embedding_json TEXT NOT NULL,
+                model TEXT DEFAULT 'simple',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS sms_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phone_number TEXT,
+                message TEXT NOT NULL,
+                status TEXT DEFAULT 'disabled',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                sent_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS watchlist (
+                id TEXT PRIMARY KEY,
+                market_name TEXT NOT NULL,
+                site_a_name TEXT NOT NULL,
+                site_b_name TEXT NOT NULL,
+                site_a_yes_price REAL NOT NULL DEFAULT 0.5,
+                site_b_yes_price REAL NOT NULL DEFAULT 0.5,
+                investment REAL NOT NULL DEFAULT 500,
+                alert_threshold REAL NOT NULL DEFAULT 3.0,
+                is_active INTEGER DEFAULT 1,
+                last_checked TEXT,
+                last_maker_roi REAL,
+                last_taker_roi REAL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS scan_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_scan_time TEXT,
+                next_scan_time TEXT,
+                is_scanning INTEGER DEFAULT 0,
+                scan_progress REAL DEFAULT 0,
+                scan_phase TEXT DEFAULT 'idle',
+                scan_message TEXT DEFAULT '',
+                total_markets INTEGER DEFAULT 0,
+                total_opportunities INTEGER DEFAULT 0
+            );
+
+            INSERT OR IGNORE INTO scan_state (id) VALUES (1);
+
+            CREATE TABLE IF NOT EXISTS arbitrage_history (
+                id TEXT PRIMARY KEY,
+                market_name TEXT NOT NULL,
+                site_a_name TEXT NOT NULL,
+                site_b_name TEXT NOT NULL,
+                site_a_yes_price REAL NOT NULL,
+                site_b_yes_price REAL NOT NULL,
+                investment REAL NOT NULL,
+                order_mode TEXT DEFAULT 'Maker',
+                gross_roi REAL,
+                net_roi REAL,
+                net_profit REAL,
+                shares INTEGER,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+        """)
+        await db.commit()
+    finally:
+        await db.close()

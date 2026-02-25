@@ -37,6 +37,18 @@ export interface Alert {
   createdAt?: string;
 }
 
+export interface ComboLeg {
+  platform: string;
+  marketId: string;
+  title: string;
+  side: "YES" | "NO";
+  price: number;
+  fee: number;
+  volume: number;
+  marketUrl?: string | null;
+  allocation: number;
+}
+
 export interface ArbitrageHistory {
   id: string;
   marketName: string;
@@ -50,6 +62,8 @@ export interface ArbitrageHistory {
   netRoi?: number | null;
   netProfit?: number | null;
   shares?: number | null;
+  isProfitable?: boolean;
+  scenario?: string | null;
   createdAt?: string;
 }
 
@@ -65,6 +79,8 @@ export interface InsertArbitrageHistory {
   netRoi?: number | null;
   netProfit?: number | null;
   shares?: number | null;
+  isProfitable?: boolean;
+  scenario?: string | null;
 }
 
 export interface User {

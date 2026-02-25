@@ -128,14 +128,33 @@ function calculateProfit(roi: number, investment: number): { profit: number; pay
   return { profit, payout, contracts };
 }
 
+interface ComboLeg {
+  platform: string;
+  marketId: string;
+  title: string;
+  side: "YES" | "NO";
+  price: number;
+  fee: number;
+  volume: number;
+  marketUrl?: string | null;
+  allocation: number;
+}
+
 interface ArbitrageOpportunity {
   marketA: StandardizedMarket;
   marketB: StandardizedMarket;
   combinedYesCost: number;
+  totalCost?: number;
+  fees?: number;
   potentialProfit: number;
   roi: number;
   matchScore: number;
   matchReason: string;
+  comboType?: "pair";
+  legCount?: number;
+  legs?: ComboLeg[];
+  earliestResolution?: string | null;
+  scenario?: number | string;
 }
 
 // Extended opportunity with computed fields for sorting
@@ -1085,6 +1104,10 @@ export function MarketBrowser({
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline">{opp.matchReason || "matched"}</Badge>
+                            <Badge variant="secondary" className="font-mono">
+                              <Layers className="w-3 h-3 mr-1" />
+                              2-leg
+                            </Badge>
                             {opp.matchScore >= 80 ? (
                               <Badge className="bg-green-500/20 text-green-700 dark:text-green-400">High confidence</Badge>
                             ) : opp.matchScore >= 60 ? (
@@ -1092,12 +1115,10 @@ export function MarketBrowser({
                             ) : (
                               <Badge className="bg-red-500/20 text-red-700 dark:text-red-400">Verify manually</Badge>
                             )}
-                            {/* Opportunity Score Badge */}
                             <Badge variant="secondary" className="font-mono">
                               <Star className="w-3 h-3 mr-1" />
                               {opp.opportunityScore}/100
                             </Badge>
-                            {/* Days to Expiry */}
                             {opp.daysToExpiry !== null && (
                               <Badge variant={opp.daysToExpiry <= 7 ? "destructive" : "outline"} className="font-mono">
                                 <Timer className="w-3 h-3 mr-1" />
@@ -1105,27 +1126,76 @@ export function MarketBrowser({
                               </Badge>
                             )}
                           </div>
-                          <div className="space-y-3">
-                            {/* Market A */}
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className={platformColors[opp.marketA.platform]}>
-                                  {opp.marketA.platform}
-                                </Badge>
-                                <span className="font-mono font-bold text-sm">{(opp.marketA.yesPrice * 100).toFixed(0)}c YES</span>
-                              </div>
-                              <p className="text-sm leading-relaxed">{opp.marketA.title}</p>
-                            </div>
-                            {/* Market B */}
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <Badge className={platformColors[opp.marketB.platform]}>
-                                  {opp.marketB.platform}
-                                </Badge>
-                                <span className="font-mono font-bold text-sm">{(opp.marketB.noPrice * 100).toFixed(0)}c NO</span>
-                              </div>
-                              <p className="text-sm leading-relaxed">{opp.marketB.title}</p>
-                            </div>
+                          <div className="space-y-2">
+                            {opp.legs && opp.legs.length > 0 ? (
+                              opp.legs.map((leg, legIdx) => (
+                                <div key={legIdx} className="space-y-0.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge className={platformColors[leg.platform] || "bg-muted text-foreground"}>
+                                      {leg.platform}
+                                    </Badge>
+                                    <span className="font-mono font-bold text-sm">
+                                      {(leg.price * 100).toFixed(0)}c {leg.side}
+                                    </span>
+                                    {leg.allocation < 1 && (
+                                      <Badge variant="outline" className="text-xs font-mono">
+                                        {(leg.allocation * 100).toFixed(0)}% alloc
+                                      </Badge>
+                                    )}
+                                    {leg.fee > 0 && (
+                                      <span className="text-xs text-amber-600 dark:text-amber-400 font-mono">
+                                        fee: {(leg.fee * 100).toFixed(1)}c
+                                      </span>
+                                    )}
+                                    {leg.marketUrl && (
+                                      <a
+                                        href={leg.marketUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 dark:text-blue-400 underline text-xs hover:text-blue-800 dark:hover:text-blue-300"
+                                        data-testid={`link-leg-${idx}-${legIdx}`}
+                                      >
+                                        {leg.platform}
+                                      </a>
+                                    )}
+                                  </div>
+                                  <p className="text-sm leading-relaxed text-muted-foreground">{leg.title}</p>
+                                </div>
+                              ))
+                            ) : (
+                              <>
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge className={platformColors[opp.marketA.platform]}>
+                                      {opp.marketA.platform}
+                                    </Badge>
+                                    <span className="font-mono font-bold text-sm">{(opp.marketA.yesPrice * 100).toFixed(0)}c YES</span>
+                                    {opp.marketA.marketUrl && (
+                                      <a href={opp.marketA.marketUrl} target="_blank" rel="noopener noreferrer"
+                                        className="text-blue-600 dark:text-blue-400 underline text-xs">
+                                        {opp.marketA.platform}
+                                      </a>
+                                    )}
+                                  </div>
+                                  <p className="text-sm leading-relaxed text-muted-foreground">{opp.marketA.title}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <Badge className={platformColors[opp.marketB.platform]}>
+                                      {opp.marketB.platform}
+                                    </Badge>
+                                    <span className="font-mono font-bold text-sm">{(opp.marketB.noPrice * 100).toFixed(0)}c NO</span>
+                                    {opp.marketB.marketUrl && (
+                                      <a href={opp.marketB.marketUrl} target="_blank" rel="noopener noreferrer"
+                                        className="text-blue-600 dark:text-blue-400 underline text-xs">
+                                        {opp.marketB.platform}
+                                      </a>
+                                    )}
+                                  </div>
+                                  <p className="text-sm leading-relaxed text-muted-foreground">{opp.marketB.title}</p>
+                                </div>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="w-full sm:w-auto sm:text-right shrink-0 space-y-2">
@@ -1163,7 +1233,10 @@ export function MarketBrowser({
                             return null;
                           })()}
                           <p className="text-sm text-muted-foreground">
-                            Cost: {(opp.combinedYesCost * 100).toFixed(0)}c | Vol: {((opp.marketA.volume + opp.marketB.volume) / 2).toLocaleString()}
+                            Cost: {((opp.totalCost || opp.combinedYesCost) * 100).toFixed(0)}c
+                            {opp.fees ? ` (${(opp.fees * 100).toFixed(1)}c fees)` : ""}
+                            {" | Vol: "}
+                            {((opp.marketA.volume + opp.marketB.volume) / 2).toLocaleString()}
                           </p>
                           <div className="flex items-center gap-2">
                             <Button
@@ -1171,8 +1244,8 @@ export function MarketBrowser({
                               variant="default"
                               className="min-h-[44px]"
                               onClick={() => openBothMarkets(
-                                opp.marketA.marketUrl || '', 
-                                opp.marketB.marketUrl || '', 
+                                opp.marketA.marketUrl || '',
+                                opp.marketB.marketUrl || '',
                                 toast
                               )}
                               disabled={!opp.marketA.marketUrl || !opp.marketB.marketUrl}

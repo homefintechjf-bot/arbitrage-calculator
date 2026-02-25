@@ -63,7 +63,7 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
         pi_markets = await fetch_predictit_markets()
 
         scan_state["progress"] = 70
-        scan_state["message"] = f"Got {len(pi_markets)} PredictIt markets. Matching..."
+        scan_state["message"] = f"Got {len(pi_markets)} PredictIt markets. Matching & grouping..."
         scan_state["phase"] = "Matching markets"
 
         all_markets = poly_markets + pi_markets
@@ -92,22 +92,33 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
         finally:
             await db.close()
 
+        scan_state["progress"] = 80
+        scan_state["message"] = "Computing 2-leg arbitrage pairs..."
+
         effective_platforms = platforms or ["Polymarket", "PredictIt"]
         opportunities = find_arbitrage_pairs(all_markets, min_similarity=35.0, enabled_platforms=effective_platforms)
         _all_opportunities = opportunities
 
+        scan_state["progress"] = 90
+        scan_state["message"] = f"Found {len(opportunities)} combos. Saving..."
+
         db = await get_db()
         try:
             for opp in opportunities[:100]:
+                legs_json = json.dumps(opp.get("legs", []))
                 await db.execute(
                     """INSERT OR REPLACE INTO matched_pairs
                        (market_a_id, market_b_id, match_score, match_reason,
-                        combined_yes_cost, potential_profit, roi)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        combined_yes_cost, potential_profit, roi, combo_type, leg_count,
+                        legs_json, fees, earliest_resolution, scenario)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         opp["marketA"]["id"], opp["marketB"]["id"],
                         opp["matchScore"], opp["matchReason"],
                         opp["combinedYesCost"], opp["potentialProfit"], opp["roi"],
+                        opp.get("comboType", "pair"), opp.get("legCount", 2), legs_json,
+                        opp.get("fees", 0), opp.get("earliestResolution"),
+                        str(opp.get("scenario", "")),
                     ),
                 )
             now = datetime.utcnow()
@@ -126,7 +137,7 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
 
         scan_state["progress"] = 100
         scan_state["phase"] = "Complete"
-        scan_state["message"] = f"Found {len(opportunities)} opportunities from {len(all_markets)} markets"
+        scan_state["message"] = f"Found {len(opportunities)} pairs from {len(all_markets)} markets"
         scan_state["status"] = "complete"
         scan_state["is_scanning"] = False
         scan_state["last_scan_time"] = datetime.utcnow().isoformat()

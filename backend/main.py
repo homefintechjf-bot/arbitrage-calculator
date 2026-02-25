@@ -98,7 +98,7 @@ async def get_opportunities(
     refresh: Optional[str] = None,
     platforms: Optional[str] = None,
     page: int = Query(1, ge=1, le=3),
-    limit: int = Query(10, ge=1, le=30),
+    limit: int = Query(50, ge=1, le=100),
 ):
     if refresh == "true":
         platform_list = platforms.split(",") if platforms else None
@@ -108,14 +108,19 @@ async def get_opportunities(
 
     if q:
         q_lower = q.lower()
-        opps = [o for o in opps if q_lower in o["marketA"]["title"].lower() or q_lower in o["marketB"]["title"].lower()]
+        opps = [o for o in opps if
+                q_lower in o["marketA"]["title"].lower() or
+                q_lower in o["marketB"]["title"].lower()]
 
     if minRoi > 0:
         opps = [o for o in opps if o["roi"] >= minRoi]
 
     if platforms:
         platform_set = set(p.strip().lower() for p in platforms.split(","))
-        opps = [o for o in opps if o["marketA"]["platform"].lower() in platform_set or o["marketB"]["platform"].lower() in platform_set]
+        def matches_platform(o):
+            platforms_in_opp = {o["marketA"]["platform"].lower(), o["marketB"]["platform"].lower()}
+            return bool(platforms_in_opp & platform_set)
+        opps = [o for o in opps if matches_platform(o)]
 
     start = (page - 1) * limit
     end = start + limit
@@ -369,6 +374,10 @@ class ArbitrageHistoryCreate(BaseModel):
     netRoi: Optional[float] = None
     netProfit: Optional[float] = None
     shares: Optional[int] = None
+    isProfitable: Optional[bool] = None
+    scenario: Optional[str] = None
+    legCount: Optional[int] = 2
+    legsJson: Optional[str] = None
 
 
 @app.get("/api/arbitrage-history")
@@ -377,8 +386,9 @@ async def get_history():
     try:
         cursor = await db.execute("SELECT * FROM arbitrage_history ORDER BY created_at DESC LIMIT 100")
         rows = await cursor.fetchall()
-        return [
-            {
+        result = []
+        for r in rows:
+            entry = {
                 "id": r["id"],
                 "marketName": r["market_name"],
                 "siteAName": r["site_a_name"],
@@ -393,8 +403,24 @@ async def get_history():
                 "shares": r["shares"],
                 "createdAt": r["created_at"],
             }
-            for r in rows
-        ]
+            try:
+                entry["isProfitable"] = bool(r["is_profitable"])
+            except (IndexError, KeyError):
+                entry["isProfitable"] = (r["net_profit"] or 0) > 0
+            try:
+                entry["scenario"] = r["scenario"]
+            except (IndexError, KeyError):
+                entry["scenario"] = None
+            try:
+                entry["legCount"] = r["leg_count"] or 2
+            except (IndexError, KeyError):
+                entry["legCount"] = 2
+            try:
+                entry["legsJson"] = r["legs_json"]
+            except (IndexError, KeyError):
+                entry["legsJson"] = None
+            result.append(entry)
+        return result
     finally:
         await db.close()
 
@@ -407,11 +433,14 @@ async def save_history(entry: ArbitrageHistoryCreate):
         await db.execute(
             """INSERT INTO arbitrage_history (id, market_name, site_a_name, site_b_name,
                site_a_yes_price, site_b_yes_price, investment, order_mode,
-               gross_roi, net_roi, net_profit, shares)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               gross_roi, net_roi, net_profit, shares, is_profitable, scenario,
+               leg_count, legs_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (entry_id, entry.marketName, entry.siteAName, entry.siteBName,
              entry.siteAYesPrice, entry.siteBYesPrice, entry.investment,
-             entry.orderMode, entry.grossRoi, entry.netRoi, entry.netProfit, entry.shares),
+             entry.orderMode, entry.grossRoi, entry.netRoi, entry.netProfit,
+             entry.shares, 1 if entry.isProfitable else 0,
+             entry.scenario, entry.legCount or 2, entry.legsJson),
         )
         await db.commit()
     finally:

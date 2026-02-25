@@ -1,6 +1,5 @@
 import aiosqlite
 import os
-import json
 from datetime import datetime
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "arbitrage.db")
@@ -36,11 +35,18 @@ async def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 market_a_id TEXT NOT NULL,
                 market_b_id TEXT NOT NULL,
+                market_c_id TEXT,
                 match_score REAL NOT NULL DEFAULT 0,
                 match_reason TEXT,
                 combined_yes_cost REAL,
                 potential_profit REAL,
                 roi REAL,
+                combo_type TEXT DEFAULT 'pair',
+                leg_count INTEGER DEFAULT 2,
+                legs_json TEXT,
+                fees REAL DEFAULT 0,
+                earliest_resolution TEXT,
+                scenario TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (market_a_id) REFERENCES markets(id),
                 FOREIGN KEY (market_b_id) REFERENCES markets(id)
@@ -132,9 +138,50 @@ async def init_db():
                 net_roi REAL,
                 net_profit REAL,
                 shares INTEGER,
+                is_profitable INTEGER DEFAULT 0,
+                scenario TEXT,
+                leg_count INTEGER DEFAULT 2,
+                legs_json TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
         await db.commit()
+
+        await _migrate_tables(db)
     finally:
         await db.close()
+
+
+async def _migrate_tables(db):
+    try:
+        cursor = await db.execute("PRAGMA table_info(matched_pairs)")
+        cols = {row[1] for row in await cursor.fetchall()}
+        migrations = {
+            "market_c_id": "ALTER TABLE matched_pairs ADD COLUMN market_c_id TEXT",
+            "combo_type": "ALTER TABLE matched_pairs ADD COLUMN combo_type TEXT DEFAULT 'pair'",
+            "leg_count": "ALTER TABLE matched_pairs ADD COLUMN leg_count INTEGER DEFAULT 2",
+            "legs_json": "ALTER TABLE matched_pairs ADD COLUMN legs_json TEXT",
+            "fees": "ALTER TABLE matched_pairs ADD COLUMN fees REAL DEFAULT 0",
+            "earliest_resolution": "ALTER TABLE matched_pairs ADD COLUMN earliest_resolution TEXT",
+            "scenario": "ALTER TABLE matched_pairs ADD COLUMN scenario TEXT",
+        }
+        for col, sql in migrations.items():
+            if col not in cols:
+                await db.execute(sql)
+
+        cursor = await db.execute("PRAGMA table_info(arbitrage_history)")
+        cols = {row[1] for row in await cursor.fetchall()}
+        history_migrations = {
+            "is_profitable": "ALTER TABLE arbitrage_history ADD COLUMN is_profitable INTEGER DEFAULT 0",
+            "scenario": "ALTER TABLE arbitrage_history ADD COLUMN scenario TEXT",
+            "leg_count": "ALTER TABLE arbitrage_history ADD COLUMN leg_count INTEGER DEFAULT 2",
+            "legs_json": "ALTER TABLE arbitrage_history ADD COLUMN legs_json TEXT",
+        }
+        for col, sql in history_migrations.items():
+            if col not in cols:
+                await db.execute(sql)
+
+        await db.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Migration warning: {e}")

@@ -100,6 +100,7 @@ def find_arbitrage_pairs(
     markets: List[Dict[str, Any]],
     min_similarity: float = 40.0,
     enabled_platforms: List[str] = None,
+    on_progress: Any = None,
 ) -> List[Dict[str, Any]]:
     if enabled_platforms:
         platform_set = set(p.lower() for p in enabled_platforms)
@@ -114,13 +115,26 @@ def find_arbitrage_pairs(
     platforms = list(by_platform.keys())
     pairs = []
 
+    total_comparisons = 0
+    for i in range(len(platforms)):
+        for j in range(i + 1, len(platforms)):
+            total_comparisons += len(by_platform[platforms[i]]) * len(by_platform[platforms[j]])
+
+    if on_progress:
+        on_progress(0, total_comparisons, 0)
+
+    completed = 0
+
     for i in range(len(platforms)):
         for j in range(i + 1, len(platforms)):
             pa, pb = platforms[i], platforms[j]
             for ma in by_platform[pa]:
                 for mb in by_platform[pb]:
+                    completed += 1
                     sim_score, reason = compute_similarity(ma["title"], mb["title"])
                     if sim_score < min_similarity:
+                        if on_progress and completed % 50 == 0:
+                            on_progress(completed, total_comparisons, len(pairs))
                         continue
 
                     arb = compute_pair_arb(ma, mb)
@@ -145,6 +159,12 @@ def find_arbitrage_pairs(
                         "scenario": arb["scenario"],
                     }
                     pairs.append(pair)
+
+                    if on_progress and completed % 50 == 0:
+                        on_progress(completed, total_comparisons, len(pairs))
+
+    if on_progress:
+        on_progress(total_comparisons, total_comparisons, len(pairs))
 
     pairs.sort(key=lambda p: (
         -p["matchScore"],

@@ -21,6 +21,9 @@ scan_state = {
     "next_scan_time": None,
     "total_markets": 0,
     "total_opportunities": 0,
+    "total_comparisons": 0,
+    "completed_comparisons": 0,
+    "pairs_found": 0,
 }
 
 _all_markets: List[Dict[str, Any]] = []
@@ -68,6 +71,7 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
 
         all_markets = poly_markets + pi_markets
         _all_markets = all_markets
+        scan_state["total_markets"] = len(all_markets)
 
         db = await get_db()
         try:
@@ -92,15 +96,26 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
         finally:
             await db.close()
 
-        scan_state["progress"] = 80
+        scan_state["progress"] = 70
+        scan_state["phase"] = "Comparing markets"
         scan_state["message"] = "Computing 2-leg arbitrage pairs..."
 
+        def on_match_progress(completed: int, total: int, pairs_found: int):
+            if total > 0:
+                match_pct = completed / total
+                scan_state["progress"] = 70 + int(match_pct * 25)
+            scan_state["total_comparisons"] = total
+            scan_state["completed_comparisons"] = completed
+            scan_state["pairs_found"] = pairs_found
+            scan_state["message"] = f"Compared {completed:,}/{total:,} pairs — {pairs_found} matches found"
+
         effective_platforms = platforms or ["Polymarket", "PredictIt"]
-        opportunities = find_arbitrage_pairs(all_markets, min_similarity=35.0, enabled_platforms=effective_platforms)
+        opportunities = find_arbitrage_pairs(all_markets, min_similarity=35.0, enabled_platforms=effective_platforms, on_progress=on_match_progress)
         _all_opportunities = opportunities
 
-        scan_state["progress"] = 90
-        scan_state["message"] = f"Found {len(opportunities)} combos. Saving..."
+        scan_state["progress"] = 95
+        scan_state["phase"] = "Saving results"
+        scan_state["message"] = f"Found {len(opportunities)} pairs. Saving..."
 
         db = await get_db()
         try:

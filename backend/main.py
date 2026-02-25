@@ -49,6 +49,10 @@ async def scan_progress():
                 "phase": state["phase"],
                 "message": state["message"],
                 "status": state["status"],
+                "totalComparisons": state.get("total_comparisons", 0),
+                "completedComparisons": state.get("completed_comparisons", 0),
+                "pairsFound": state.get("pairs_found", 0),
+                "totalMarkets": state.get("total_markets", 0),
             })
             if state_str != last_state:
                 yield f"data: {state_str}\n\n"

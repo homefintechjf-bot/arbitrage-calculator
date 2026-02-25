@@ -340,6 +340,10 @@ export function MarketBrowser({
     phase: string;
     message: string;
     status: string;
+    totalComparisons: number;
+    completedComparisons: number;
+    pairsFound: number;
+    totalMarkets: number;
   } | null>(null);
   const [manualPairOpen, setManualPairOpen] = useState(false);
   const [marketA, setMarketA] = useState<StandardizedMarket | null>(null);
@@ -488,6 +492,10 @@ export function MarketBrowser({
           phase: data.phase || 'Starting...',
           message: data.message || '',
           status: data.status || 'idle',
+          totalComparisons: data.totalComparisons || 0,
+          completedComparisons: data.completedComparisons || 0,
+          pairsFound: data.pairsFound || 0,
+          totalMarkets: data.totalMarkets || 0,
         });
         
         // Auto-stop when complete
@@ -878,13 +886,23 @@ export function MarketBrowser({
         {(autoRefresh || isScanning) && (
           <div className="space-y-2" data-testid="scan-status">
             {isScanning ? (
-              <div className="p-4 rounded-md border bg-muted/30 space-y-3">
+              <div className={`p-4 rounded-md border space-y-3 transition-opacity duration-700 ${
+                scanProgress?.percent === 100 ? 'bg-green-500/10 border-green-500/30 opacity-80' : 'bg-muted/30'
+              }`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="relative w-5 h-5">
-                      <div className="absolute inset-0 rounded-full border-2 border-primary/30" />
-                      <div className="absolute inset-0 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    </div>
+                    {scanProgress?.percent === 100 ? (
+                      <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="relative w-5 h-5">
+                        <div className="absolute inset-0 rounded-full border-2 border-green-500/30" />
+                        <div className="absolute inset-0 rounded-full border-2 border-green-500 border-t-transparent animate-spin" />
+                      </div>
+                    )}
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium">
                         {scanProgress?.phase || 'Scanning markets...'}
@@ -895,7 +913,7 @@ export function MarketBrowser({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge variant="default" className="font-mono tabular-nums text-lg px-3 py-1">
+                    <Badge className="font-mono tabular-nums text-lg px-3 py-1 bg-green-600 text-white hover:bg-green-600">
                       {scanProgress?.percent ?? 0}%
                     </Badge>
                     <Badge variant="outline" className="font-mono tabular-nums">
@@ -904,15 +922,27 @@ export function MarketBrowser({
                   </div>
                 </div>
                 <div className="relative h-3 bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className="absolute inset-y-0 left-0 bg-primary rounded-full transition-all duration-300 ease-out"
+                  <div
+                    className={`absolute inset-y-0 left-0 rounded-full transition-all duration-300 ease-out ${
+                      scanProgress?.percent === 100 ? 'bg-green-500' : 'bg-green-500'
+                    }`}
                     style={{ width: `${scanProgress?.percent ?? 0}%` }}
+                    data-testid="progress-bar-fill"
                   />
-                  <div 
-                    className="absolute inset-y-0 left-0 bg-primary/30 rounded-full animate-pulse"
-                    style={{ width: `${Math.min(100, (scanProgress?.percent ?? 0) + 5)}%` }}
-                  />
+                  {(scanProgress?.percent ?? 0) < 100 && (
+                    <div
+                      className="absolute inset-y-0 left-0 bg-green-400/30 rounded-full animate-pulse"
+                      style={{ width: `${Math.min(100, (scanProgress?.percent ?? 0) + 3)}%` }}
+                    />
+                  )}
                 </div>
+                {scanProgress && scanProgress.totalComparisons > 0 && (
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
+                    <span>{scanProgress.totalMarkets.toLocaleString()} markets</span>
+                    <span>{scanProgress.completedComparisons.toLocaleString()}/{scanProgress.totalComparisons.toLocaleString()} comparisons</span>
+                    <span className="text-green-600 dark:text-green-400 font-semibold">{scanProgress.pairsFound} matches</span>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-3 p-3 rounded-md border bg-muted/30">

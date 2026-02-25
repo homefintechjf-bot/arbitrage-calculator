@@ -1,7 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Calculator, Radar, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { WalletConnectButton } from "@/components/wallet-connect-button";
 
 const navItems = [
   { path: "/", label: "Calculator", icon: Calculator },
@@ -35,7 +34,6 @@ export function NavHeader() {
               );
             })}
           </nav>
-          <WalletConnectButton />
         </div>
       </div>
     </header>

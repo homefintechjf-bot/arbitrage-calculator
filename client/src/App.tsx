@@ -4,8 +4,6 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { WalletProvider } from "@/components/wallet-provider";
-import { PolymarketProvider } from "@/contexts/polymarket-context";
 import { ComparisonProvider } from "@/contexts/comparison-context";
 import { OutcomeComparisonDock } from "@/components/outcome-comparison-dock";
 import { NavHeader } from "@/components/nav-header";
@@ -60,21 +58,17 @@ function OfflineIndicator() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <WalletProvider>
-        <PolymarketProvider>
-          <ComparisonProvider>
-            <TooltipProvider>
-              <div className="min-h-screen bg-background pb-24">
-                <NavHeader />
-                <Router />
-              </div>
-              <OutcomeComparisonDock />
-              <OfflineIndicator />
-              <Toaster />
-            </TooltipProvider>
-          </ComparisonProvider>
-        </PolymarketProvider>
-      </WalletProvider>
+      <ComparisonProvider>
+        <TooltipProvider>
+          <div className="min-h-screen bg-background pb-24">
+            <NavHeader />
+            <Router />
+          </div>
+          <OutcomeComparisonDock />
+          <OfflineIndicator />
+          <Toaster />
+        </TooltipProvider>
+      </ComparisonProvider>
     </QueryClientProvider>
   );
 }

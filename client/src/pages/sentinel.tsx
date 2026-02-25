@@ -58,7 +58,6 @@ import {
   sendUrgentNotification
 } from "@/lib/notifications";
 import { MarketBrowser } from "@/components/market-browser";
-import { UserPositions } from "@/components/user-positions";
 import { Slider } from "@/components/ui/slider";
 
 // Calculate fee for a specific platform
@@ -714,10 +713,6 @@ export default function SentinelPage() {
             enabledPlatforms={enabledPlatforms}
             onScanComplete={() => setLastScan(new Date())}
           />
-        </div>
-
-        <div className="mb-6">
-          <UserPositions />
         </div>
 
         <Card className="mb-6">

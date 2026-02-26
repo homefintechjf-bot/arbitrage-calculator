@@ -10,9 +10,10 @@ Full-stack prediction market arbitrage finder that fetches live data from Kalshi
 - **Start:** `bash start.sh` launches both
 
 ## Data Sources
-- **Kalshi:** ~5,000 binary markets via public API (221 pages, rate-limit aware with retry)
-- **Polymarket:** ~3,000 markets via Gamma API (30 pages)
+- **Kalshi:** ~5,900 binary markets via public API (500 pages, rate-limit aware with retry)
+- **Polymarket:** ~31,300 markets via Gamma API (63 pages at 500/page)
 - **PredictIt:** ~845 contracts via public API
+- **Total:** ~38,000 markets across 3 platforms
 
 ## Fee Model (as of Feb 2026)
 - **Kalshi:** Taker `0.07 × p × (1-p)` per contract; Maker free; Deposit free (ACH); 2% debit card
@@ -21,18 +22,19 @@ Full-stack prediction market arbitrage finder that fetches live data from Kalshi
 
 ## Key Files
 - `backend/fetchers/kalshi.py` - Paginated Kalshi fetcher with 429 retry
-- `backend/fetchers/polymarket.py` - Paginated Polymarket fetcher
+- `backend/fetchers/polymarket.py` - Paginated Polymarket fetcher (500/page, up to 200 pages)
 - `backend/fetchers/predictit.py` - PredictIt fetcher (all contracts as binary)
 - `backend/matcher.py` - Keyword-indexed 2-market pair matcher with fee-aware ROI
 - `backend/scanner.py` - Auto-scan loop with SSE progress streaming
 - `backend/main.py` - FastAPI endpoints
-- `client/src/components/market-browser.tsx` - Main UI with progress bar
-- `client/src/pages/sentinel.tsx` - Platform comparison tool
+- `client/src/components/market-browser.tsx` - Main UI with progress bar, scan-on-mount detection
+- `client/src/pages/sentinel.tsx` - Watchlist/alerts with custom sound upload
 - `client/src/pages/arbitrage-calculator.tsx` - Manual arbitrage calculator
+- `client/src/lib/notifications.ts` - Sound system with custom audio upload/persistence
 - `shared/schema.ts` - TypeScript interfaces
 
 ## Matching Algorithm
-Uses inverted keyword index to reduce cross-platform comparisons from millions to hundreds of thousands. Combines SequenceMatcher (40%) + Jaccard similarity (60%) for scoring. Min threshold: 35%.
+Uses inverted keyword index to reduce cross-platform comparisons from ~216M brute-force to ~26M candidate pairs. Combines SequenceMatcher (40%) + Jaccard similarity (60%) for scoring. Min threshold: 35%.
 
 ## Database
 SQLite via aiosqlite. Tables: markets, matched_pairs, scan_state, watchlist.

@@ -64,12 +64,12 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
         scan_state["progress"] = 3
         scan_state["phase"] = "Fetching Kalshi"
         scan_state["message"] = "Fetching Kalshi markets (paginating)..."
-        kalshi_markets = await fetch_kalshi_markets(limit=5000)
+        kalshi_markets = await fetch_kalshi_markets(limit=10000)
 
-        scan_state["progress"] = 20
+        scan_state["progress"] = 15
         scan_state["phase"] = "Fetching Polymarket"
         scan_state["message"] = f"Got {len(kalshi_markets)} Kalshi markets. Fetching Polymarket..."
-        poly_markets = await fetch_polymarket_markets(limit=3000)
+        poly_markets = await fetch_polymarket_markets(limit=50000)
 
         scan_state["progress"] = 40
         scan_state["message"] = f"Got {len(poly_markets)} Polymarket markets. Fetching PredictIt..."

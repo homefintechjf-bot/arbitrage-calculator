@@ -70,7 +70,7 @@ def _parse_market(m: dict) -> dict | None:
     }
 
 
-async def fetch_kalshi_markets(limit: int = 50000) -> List[Dict[str, Any]]:
+async def fetch_kalshi_markets(limit: int = 10000) -> List[Dict[str, Any]]:
     markets = []
     cursor = None
     pages_fetched = 0

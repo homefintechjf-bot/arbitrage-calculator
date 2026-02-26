@@ -1,4 +1,5 @@
 import httpx
+import asyncio
 import logging
 import json
 from typing import List, Dict, Any
@@ -7,11 +8,11 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 POLYMARKET_GAMMA_API = "https://gamma-api.polymarket.com"
-PAGE_SIZE = 100
-MAX_PAGES = 30
+PAGE_SIZE = 500
+MAX_PAGES = 200
 
 
-async def fetch_polymarket_markets(limit: int = 3000) -> List[Dict[str, Any]]:
+async def fetch_polymarket_markets(limit: int = 50000) -> List[Dict[str, Any]]:
     markets = []
     offset = 0
     pages_fetched = 0
@@ -97,6 +98,11 @@ async def fetch_polymarket_markets(limit: int = 3000) -> List[Dict[str, Any]]:
 
                 if len(raw_markets) < PAGE_SIZE:
                     break
+
+                if pages_fetched % 10 == 0:
+                    await asyncio.sleep(1.0)
+                else:
+                    await asyncio.sleep(0.15)
 
     except Exception as e:
         logger.error(f"Polymarket fetch error: {e}")

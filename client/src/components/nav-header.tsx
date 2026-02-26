@@ -12,7 +12,7 @@ export function NavHeader() {
   const [location] = useLocation();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 w-full border-b bg-background">
       <div className="container mx-auto px-2 sm:px-4 max-w-4xl">
         <div className="flex h-14 items-center justify-between gap-1 sm:gap-4">
           <div className="font-semibold text-sm sm:text-lg shrink-0">Arb<span className="hidden sm:inline"> Finder</span></div>

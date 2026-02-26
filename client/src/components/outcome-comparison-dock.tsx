@@ -165,7 +165,7 @@ export function OutcomeComparisonDock() {
         data-testid="comparison-dock"
       >
         <div className="max-w-4xl mx-auto">
-          <div className="bg-background/95 backdrop-blur-lg rounded-3xl border-2 shadow-2xl p-4">
+          <div className="bg-background rounded-3xl border-2 shadow-2xl p-4">
             <div className="flex items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5 text-primary" />

@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from typing import Optional, List
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -26,9 +26,17 @@ async def startup():
 
 
 @app.post("/api/scan")
-async def trigger_scan(platforms: Optional[List[str]] = None):
-    result = await run_scan(platforms)
-    return result
+async def trigger_scan(request: Request = None):
+    try:
+        body = await request.json() if request else {}
+    except Exception:
+        body = {}
+    platforms = body.get("platforms", None)
+    state = get_scan_state()
+    if state["is_scanning"]:
+        return {"status": "already_scanning", "message": "A scan is already in progress"}
+    asyncio.create_task(run_scan(platforms))
+    return {"status": "started", "message": "Scan started in background"}
 
 
 @app.get("/api/scan-status")
@@ -99,15 +107,10 @@ async def market_stats():
 async def get_opportunities(
     q: Optional[str] = None,
     minRoi: float = 0,
-    refresh: Optional[str] = None,
     platforms: Optional[str] = None,
     page: int = Query(1, ge=1, le=3),
     limit: int = Query(50, ge=1, le=100),
 ):
-    if refresh == "true":
-        platform_list = platforms.split(",") if platforms else None
-        await run_scan(platform_list)
-
     opps = get_cached_opportunities()
 
     if q:

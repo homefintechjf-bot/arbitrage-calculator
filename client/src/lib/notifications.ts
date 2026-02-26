@@ -1,6 +1,3 @@
-// Notification and alert system for arbitrage opportunities
-
-// Request notification permission
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!("Notification" in window)) {
     console.log("This browser does not support notifications");
@@ -19,12 +16,10 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return false;
 }
 
-// Check if notifications are enabled
 export function isNotificationEnabled(): boolean {
   return "Notification" in window && Notification.permission === "granted";
 }
 
-// Send urgent push notification
 export function sendUrgentNotification(title: string, body: string, data?: any): void {
   if (!isNotificationEnabled()) return;
 
@@ -33,12 +28,11 @@ export function sendUrgentNotification(title: string, body: string, data?: any):
     icon: "/icon-192.svg",
     badge: "/icon-192.svg",
     tag: "arbitrage-alert",
-    requireInteraction: true, // Keep notification visible until user interacts
+    requireInteraction: true,
     silent: false,
     data,
   };
 
-  // Vibration is supported in some browsers
   if ("vibrate" in navigator) {
     (notificationOptions as any).vibrate = [500, 200, 500, 200, 500];
   }
@@ -51,9 +45,13 @@ export function sendUrgentNotification(title: string, body: string, data?: any):
   };
 }
 
-// Audio alert system
 let audioContext: AudioContext | null = null;
 let globalVolume: number = 0.8;
+let customSoundUrl: string | null = null;
+let customSoundBuffer: AudioBuffer | null = null;
+
+const CUSTOM_SOUND_KEY = "arb-finder-custom-sound";
+const CUSTOM_SOUND_NAME_KEY = "arb-finder-custom-sound-name";
 
 export function setGlobalVolume(volume: number): void {
   globalVolume = Math.max(0, Math.min(1, volume));
@@ -64,74 +62,141 @@ export function getGlobalVolume(): number {
 }
 
 function getAudioContext(): AudioContext {
-  if (!audioContext) {
+  if (!audioContext || audioContext.state === "closed") {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   }
   return audioContext;
 }
 
-// Play alert sound with ROI-based intensity
-export function playAlertSound(roi: number = 0): void {
+export async function setCustomSound(file: File): Promise<void> {
+  const ctx = getAudioContext();
+  if (ctx.state === "suspended") await ctx.resume();
+
+  const arrayBuffer = await file.arrayBuffer();
+  customSoundBuffer = await ctx.decodeAudioData(arrayBuffer);
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    customSoundUrl = reader.result as string;
+    try {
+      localStorage.setItem(CUSTOM_SOUND_KEY, customSoundUrl);
+      localStorage.setItem(CUSTOM_SOUND_NAME_KEY, file.name);
+    } catch (e) {
+      // localStorage might be full for large files
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+export function clearCustomSound(): void {
+  customSoundUrl = null;
+  customSoundBuffer = null;
+  localStorage.removeItem(CUSTOM_SOUND_KEY);
+  localStorage.removeItem(CUSTOM_SOUND_NAME_KEY);
+}
+
+export function hasCustomSound(): boolean {
+  return customSoundBuffer !== null || localStorage.getItem(CUSTOM_SOUND_KEY) !== null;
+}
+
+export function getCustomSoundName(): string | null {
+  return localStorage.getItem(CUSTOM_SOUND_NAME_KEY);
+}
+
+async function loadSavedCustomSound(): Promise<void> {
+  if (customSoundBuffer) return;
+  const saved = localStorage.getItem(CUSTOM_SOUND_KEY);
+  if (!saved) return;
+
   try {
     const ctx = getAudioContext();
+    if (ctx.state === "suspended") await ctx.resume();
+    const response = await fetch(saved);
+    const arrayBuffer = await response.arrayBuffer();
+    customSoundBuffer = await ctx.decodeAudioData(arrayBuffer);
+    customSoundUrl = saved;
+  } catch (e) {
+    localStorage.removeItem(CUSTOM_SOUND_KEY);
+  }
+}
+
+async function playCustomSoundBuffer(): Promise<boolean> {
+  await loadSavedCustomSound();
+  if (!customSoundBuffer) return false;
+
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state === "suspended") await ctx.resume();
+    const source = ctx.createBufferSource();
+    const gainNode = ctx.createGain();
+    source.buffer = customSoundBuffer;
+    source.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    gainNode.gain.value = globalVolume;
+    source.start(0);
+    return true;
+  } catch (e) {
+    console.error("Failed to play custom sound:", e);
+    return false;
+  }
+}
+
+export async function playAlertSound(roi: number = 0): Promise<void> {
+  try {
+    const played = await playCustomSoundBuffer();
+    if (played) return;
+
+    const ctx = getAudioContext();
     const volume = globalVolume;
-    
-    // Resume context if suspended (required for autoplay policies)
+
     if (ctx.state === "suspended") {
-      ctx.resume();
+      await ctx.resume();
     }
 
-    // Create oscillator for alert beep sequence
     const playBeep = (startTime: number, frequency: number, duration: number, beepVolume: number = volume) => {
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
-      
+
       oscillator.connect(gainNode);
       gainNode.connect(ctx.destination);
-      
+
       oscillator.frequency.value = frequency;
       oscillator.type = "square";
-      
+
       gainNode.gain.setValueAtTime(beepVolume, startTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-      
+
       oscillator.start(startTime);
       oscillator.stop(startTime + duration);
     };
 
     const now = ctx.currentTime;
-    
+
     if (roi >= 5) {
-      // Urgent alert (>=5%): Urgent, high-intensity pattern
       playBeep(now, 880, 0.1);
       playBeep(now + 0.15, 880, 0.1);
       playBeep(now + 0.3, 880, 0.1);
       playBeep(now + 0.45, 1100, 0.3);
     } else if (roi >= 3) {
-      // Normal alert (3-5%): Distinct alert
       playBeep(now, 660, 0.15);
       playBeep(now + 0.2, 880, 0.15);
       playBeep(now + 0.4, 660, 0.15);
     } else {
-      // Gentle alert (1-3%): Soft notification
       playBeep(now, 440, 0.2, volume * 0.5);
       playBeep(now + 0.3, 554.37, 0.2, volume * 0.5);
     }
-    
+
   } catch (err) {
     console.error("Failed to play alert sound:", err);
   }
 }
 
-// Vibrate device (mobile)
 export function vibrateDevice(): void {
   if ("vibrate" in navigator) {
-    // Strong vibration pattern: long-short-long-short-long
     navigator.vibrate([500, 200, 500, 200, 800]);
   }
 }
 
-// Flash screen for visual alert
 export function flashScreen(flashCount: number = 3): void {
   const overlay = document.createElement("div");
   overlay.id = "alert-flash-overlay";
@@ -162,41 +227,38 @@ export function flashScreen(flashCount: number = 3): void {
   flash();
 }
 
-// Combined urgent alert - fires all notification methods
-export function triggerUrgentAlert(
-  title: string, 
+export async function triggerUrgentAlert(
+  title: string,
   message: string,
   options?: {
     playSound?: boolean;
     vibrate?: boolean;
     flash?: boolean;
     notification?: boolean;
+    roi?: number;
   }
-): void {
+): Promise<void> {
   const opts = {
     playSound: true,
     vibrate: true,
     flash: true,
     notification: true,
+    roi: 0,
     ...options
   };
 
-  // Play sound
   if (opts.playSound) {
-    playAlertSound();
+    await playAlertSound(opts.roi);
   }
 
-  // Vibrate
   if (opts.vibrate) {
     vibrateDevice();
   }
 
-  // Flash screen
   if (opts.flash) {
     flashScreen();
   }
 
-  // Send push notification
   if (opts.notification) {
     sendUrgentNotification(title, message);
   }

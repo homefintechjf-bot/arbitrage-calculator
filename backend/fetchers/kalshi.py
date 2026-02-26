@@ -74,6 +74,7 @@ async def fetch_kalshi_markets(limit: int = 50000) -> List[Dict[str, Any]]:
     markets = []
     cursor = None
     pages_fetched = 0
+    consecutive_empty = 0
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -119,6 +120,14 @@ async def fetch_kalshi_markets(limit: int = 50000) -> List[Dict[str, Any]]:
                 logger.info(f"Kalshi page {pages_fetched}: {len(raw_markets)} raw, +{page_binary} binary (total: {len(markets)})")
 
                 if not cursor or len(raw_markets) < PAGE_SIZE:
+                    break
+
+                if page_binary == 0:
+                    consecutive_empty += 1
+                else:
+                    consecutive_empty = 0
+                if consecutive_empty >= 20:
+                    logger.info(f"Kalshi: stopping early after {consecutive_empty} consecutive pages with 0 binary markets")
                     break
 
                 if pages_fetched % 10 == 0:

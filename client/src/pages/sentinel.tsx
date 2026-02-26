@@ -55,7 +55,11 @@ import {
   playAlertSound,
   setGlobalVolume,
   getGlobalVolume,
-  sendUrgentNotification
+  sendUrgentNotification,
+  setCustomSound,
+  clearCustomSound,
+  hasCustomSound,
+  getCustomSoundName,
 } from "@/lib/notifications";
 import { MarketBrowser } from "@/components/market-browser";
 import { Slider } from "@/components/ui/slider";
@@ -211,9 +215,32 @@ export default function SentinelPage() {
     }
   };
 
-  const testAlertSound = () => {
-    playAlertSound();
-    toast({ title: "Test alert", description: "This is how alerts will sound" });
+  const [customSoundName, setCustomSoundName] = useState<string | null>(
+    hasCustomSound() ? (getCustomSoundName() || "Custom sound loaded") : null
+  );
+
+  const testAlertSound = async () => {
+    await playAlertSound(5);
+    toast({ title: "Test alert", description: "Playing urgent alert sound" });
+  };
+
+  const handleCustomSoundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await setCustomSound(file);
+      setCustomSoundName(file.name);
+      toast({ title: "Custom sound set", description: `Using "${file.name}" as alert sound` });
+    } catch (err) {
+      toast({ title: "Invalid audio file", description: "Please upload a valid .mp3, .wav, or .ogg file", variant: "destructive" });
+    }
+    e.target.value = "";
+  };
+
+  const handleClearCustomSound = () => {
+    clearCustomSound();
+    setCustomSoundName(null);
+    toast({ title: "Custom sound removed", description: "Using default alert sounds" });
   };
 
   const handleVolumeChange = (values: number[]) => {
@@ -765,7 +792,7 @@ export default function SentinelPage() {
               </div>
             </div>
             {soundEnabled && (
-              <div className="space-y-2 py-2 border-t">
+              <div className="space-y-3 py-2 border-t">
                 <div className="flex justify-between items-center">
                   <Label className="text-sm font-medium flex items-center gap-2">
                     <Volume2 className="w-4 h-4" />
@@ -784,6 +811,34 @@ export default function SentinelPage() {
                 <p className="text-xs text-muted-foreground">
                   ROI-based sounds: Urgent (≥5%), Normal (3-5%), Gentle (1-3%)
                 </p>
+                <div className="border-t pt-3 space-y-2">
+                  <Label className="text-sm font-medium">Custom Alert Sound</Label>
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        className="hidden"
+                        onChange={handleCustomSoundUpload}
+                        data-testid="input-custom-sound"
+                      />
+                      <Button variant="outline" size="sm" asChild>
+                        <span>Upload Sound File</span>
+                      </Button>
+                    </label>
+                    {customSoundName && (
+                      <>
+                        <span className="text-xs text-muted-foreground truncate max-w-[150px]">{customSoundName}</span>
+                        <Button variant="ghost" size="sm" onClick={handleClearCustomSound} data-testid="button-clear-sound">
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {customSoundName ? "Custom sound active — replaces default beeps" : "Upload .mp3, .wav, or .ogg to replace default alert beeps"}
+                  </p>
+                </div>
               </div>
             )}
             <p className="text-xs text-muted-foreground border-t pt-3">

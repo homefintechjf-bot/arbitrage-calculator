@@ -406,6 +406,19 @@ export function MarketBrowser({
     },
   });
 
+  useEffect(() => {
+    fetch("/api/scan-status")
+      .then(res => res.json())
+      .then(state => {
+        if (state.is_scanning) {
+          setIsScanning(true);
+          setScanStartTime(new Date());
+          setScanElapsed(0);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Calculate manual pair ROI preview
   const manualPairPreview = useMemo(() => {
     if (!marketA || !marketB) return null;
@@ -445,26 +458,41 @@ export function MarketBrowser({
   const { data: opportunities = [], isLoading: oppsLoading, refetch: refetchOpps } = useQuery<ArbitrageOpportunity[]>({
     queryKey: ["/api/arbitrage-opportunities", searchQuery, enabledPlatforms],
     queryFn: async () => {
-      setIsScanning(true);
-      setScanStartTime(new Date());
-      setScanElapsed(0);
       const params = new URLSearchParams();
       if (searchQuery) params.set("q", searchQuery);
       params.set("minRoi", "0");
-      params.set("refresh", "true");
       params.set("platforms", enabledPlatforms.join(","));
       const res = await fetch(`/api/arbitrage-opportunities?${params}`);
       if (!res.ok) throw new Error("Failed to fetch");
       setLastRefresh(new Date());
-      setIsScanning(false);
-      setScanStartTime(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/market-stats"] });
-      onScanComplete?.();
       return res.json();
     },
     enabled: activeTab === "opportunities",
     staleTime: 60000,
   });
+
+  const triggerScan = async () => {
+    if (isScanning) return;
+    setIsScanning(true);
+    setScanStartTime(new Date());
+    setScanElapsed(0);
+    setScanProgress(null);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platforms: enabledPlatforms }),
+      });
+      const data = await res.json();
+      if (data.status === "already_scanning") {
+        toast({ title: "Scan in progress", description: "A scan is already running. Please wait for it to complete." });
+      }
+    } catch (e) {
+      setIsScanning(false);
+      setScanStartTime(null);
+      toast({ title: "Scan failed", description: "Could not start scan. Please try again.", variant: "destructive" });
+    }
+  };
 
   // Track elapsed time during scanning
   useEffect(() => {
@@ -477,10 +505,7 @@ export function MarketBrowser({
 
   // Subscribe to SSE for real-time progress updates
   useEffect(() => {
-    if (!isScanning) {
-      setScanProgress(null);
-      return;
-    }
+    if (!isScanning) return;
     
     const eventSource = new EventSource('/api/scan-progress');
     
@@ -498,9 +523,20 @@ export function MarketBrowser({
           totalMarkets: data.totalMarkets || 0,
         });
         
-        // Auto-stop when complete
-        if (data.status === 'complete' || data.status === 'error') {
+        if (data.status === 'complete') {
           eventSource.close();
+          setTimeout(() => {
+            refetchOpps();
+            queryClient.invalidateQueries({ queryKey: ["/api/market-stats"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/markets"] });
+            onScanComplete?.();
+            setIsScanning(false);
+            setScanStartTime(null);
+          }, 1500);
+        } else if (data.status === 'error') {
+          eventSource.close();
+          setIsScanning(false);
+          setScanStartTime(null);
         }
       } catch (e) {
         // Ignore parse errors
@@ -509,6 +545,22 @@ export function MarketBrowser({
     
     eventSource.onerror = () => {
       eventSource.close();
+      setTimeout(() => {
+        fetch("/api/scan-status")
+          .then(r => r.json())
+          .then(s => {
+            if (!s.is_scanning) {
+              setIsScanning(false);
+              setScanStartTime(null);
+              refetchOpps();
+              queryClient.invalidateQueries({ queryKey: ["/api/market-stats"] });
+            }
+          })
+          .catch(() => {
+            setIsScanning(false);
+            setScanStartTime(null);
+          });
+      }, 2000);
     };
     
     return () => {
@@ -674,7 +726,7 @@ export function MarketBrowser({
     if (activeTab === "all") {
       refetchMarkets();
     } else {
-      refetchOpps();
+      triggerScan();
     }
   };
 

@@ -48,14 +48,39 @@ def get_cached_opportunities() -> List[Dict[str, Any]]:
     return _all_opportunities
 
 
+_fetch_status: Dict[str, str] = {}
+
+
 async def _fetch_with_progress(name, fetch_coro, results_dict):
     try:
+        _fetch_status[name] = "fetching..."
         result = await fetch_coro
         results_dict[name] = result
+        _fetch_status[name] = f"done ({len(result):,})"
         logger.info(f"{name}: fetched {len(result)} markets")
     except Exception as e:
         logger.error(f"{name} fetch error: {e}")
         results_dict[name] = []
+        _fetch_status[name] = f"error"
+
+
+def _update_fetch_progress():
+    parts = []
+    for name in ["Kalshi", "Polymarket", "PredictIt"]:
+        status = _fetch_status.get(name, "waiting")
+        parts.append(f"{name}: {status}")
+    done_count = sum(1 for s in _fetch_status.values() if s.startswith("done") or s == "error")
+    pct = 3 + int((done_count / 3) * 42)
+    scan_state["progress"] = pct
+    scan_state["message"] = " | ".join(parts)
+
+
+async def _fetch_progress_updater(results_dict):
+    while True:
+        _update_fetch_progress()
+        if len(results_dict) >= 3:
+            break
+        await asyncio.sleep(2)
 
 
 async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -72,6 +97,7 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
     scan_state["total_comparisons"] = 0
     scan_state["completed_comparisons"] = 0
     scan_state["pairs_found"] = 0
+    _fetch_status.clear()
 
     try:
         scan_state["progress"] = 3
@@ -83,6 +109,7 @@ async def run_scan(platforms: Optional[List[str]] = None) -> Dict[str, Any]:
             _fetch_with_progress("Kalshi", fetch_kalshi_markets(limit=10000), results),
             _fetch_with_progress("Polymarket", fetch_polymarket_markets(limit=50000), results),
             _fetch_with_progress("PredictIt", fetch_predictit_markets(), results),
+            _fetch_progress_updater(results),
         )
 
         kalshi_markets = results.get("Kalshi", [])

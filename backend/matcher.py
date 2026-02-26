@@ -196,7 +196,7 @@ def find_arbitrage_pairs(
     if on_progress:
         on_progress(0, total_comparisons, 0)
 
-    MIN_JACCARD_PREFILTER = 0.15
+    MIN_JACCARD_PREFILTER = 0.30
 
     pairs = []
     completed = 0
@@ -211,7 +211,7 @@ def find_arbitrage_pairs(
         jaccard = compute_similarity_fast(kw_a, kw_b)
         if jaccard < MIN_JACCARD_PREFILTER:
             skipped_jaccard += 1
-            if on_progress and completed % 5000 == 0:
+            if on_progress and completed % 50000 == 0:
                 on_progress(completed, total_comparisons, len(pairs))
             continue
 
@@ -220,7 +220,7 @@ def find_arbitrage_pairs(
 
         sim_score, reason = compute_similarity(ma["title"], mb["title"])
         if sim_score < min_similarity:
-            if on_progress and completed % 5000 == 0:
+            if on_progress and completed % 50000 == 0:
                 on_progress(completed, total_comparisons, len(pairs))
             continue
 
@@ -247,7 +247,7 @@ def find_arbitrage_pairs(
         }
         pairs.append(pair)
 
-        if on_progress and completed % 5000 == 0:
+        if on_progress and completed % 50000 == 0:
             on_progress(completed, total_comparisons, len(pairs))
 
     if on_progress:

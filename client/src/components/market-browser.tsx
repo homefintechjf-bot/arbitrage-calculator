@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Search, TrendingUp, Loader2, RefreshCw, DollarSign, Plus, Clock, Link2, Check, ArrowUpDown, Filter, Flame, Timer, BarChart3, Zap, Star, ThumbsUp, ThumbsDown, HelpCircle, ExternalLink, PanelLeft, PanelRight, Layers } from "lucide-react";
+import { Search, TrendingUp, Loader2, RefreshCw, DollarSign, Plus, Clock, Link2, Check, ArrowUpDown, Filter, Flame, Timer, BarChart3, Zap, Star, ThumbsUp, ThumbsDown, HelpCircle, ExternalLink, PanelLeft, PanelRight, Layers, EyeOff } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -361,14 +361,14 @@ export function MarketBrowser({
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   
-  // Track which opportunities have been rated in this session
-  const [ratedPairs, setRatedPairs] = useState<Set<string>>(new Set());
+  const [ratedPairs, setRatedPairs] = useState<Map<string, string>>(new Map());
+  const [dismissedPairs, setDismissedPairs] = useState<Set<string>>(new Set());
   
   const { toast } = useToast();
   
   // Feedback mutation for machine learning
   const feedbackMutation = useMutation({
-    mutationFn: async ({ opportunity, verdict }: { opportunity: ArbitrageOpportunity; verdict: 'approve' | 'reject' | 'not_binary' }) => {
+    mutationFn: async ({ opportunity, verdict }: { opportunity: ArbitrageOpportunity; verdict: 'approve' | 'reject' | 'not_binary' | 'not_interested' }) => {
       return await apiRequest('POST', '/api/match-feedback', {
         marketAId: opportunity.marketA.id,
         marketATitle: opportunity.marketA.title,
@@ -383,12 +383,20 @@ export function MarketBrowser({
     },
     onSuccess: (_, variables) => {
       const pairKey = `${variables.opportunity.marketA.id}-${variables.opportunity.marketB.id}`;
-      setRatedPairs(prev => new Set(Array.from(prev).concat([pairKey])));
-      const verdictLabel = variables.verdict === 'approve' ? 'Good match' : variables.verdict === 'reject' ? 'Not a match' : 'Not binary';
-      toast({
-        title: "Feedback recorded",
-        description: `Marked as: ${verdictLabel}. Thanks for improving our matching!`,
-      });
+      if (variables.verdict === 'not_interested') {
+        setDismissedPairs(prev => new Set(Array.from(prev).concat([pairKey])));
+        toast({
+          title: "Dismissed",
+          description: "This opportunity has been hidden.",
+        });
+      } else {
+        setRatedPairs(prev => new Map(Array.from(prev).concat([[pairKey, variables.verdict]])));
+        const verdictLabel = variables.verdict === 'approve' ? 'Good match' : variables.verdict === 'reject' ? 'Not a match' : 'Not binary';
+        toast({
+          title: "Feedback recorded",
+          description: `Marked as: ${verdictLabel}. Thanks for improving our matching!`,
+        });
+      }
     },
     onError: (error: any) => {
       if (error.message?.includes('409')) {
@@ -415,6 +423,23 @@ export function MarketBrowser({
           setScanStartTime(new Date());
           setScanElapsed(0);
         }
+      })
+      .catch(() => {});
+    fetch("/api/match-feedback")
+      .then(res => res.json())
+      .then((items: Array<{ marketAId: string; marketBId: string; verdict: string }>) => {
+        const rated = new Map<string, string>();
+        const dismissed = new Set<string>();
+        for (const item of items) {
+          const key = `${item.marketAId}-${item.marketBId}`;
+          if (item.verdict === 'not_interested') {
+            dismissed.add(key);
+          } else {
+            rated.set(key, item.verdict);
+          }
+        }
+        setRatedPairs(rated);
+        setDismissedPairs(dismissed);
       })
       .catch(() => {});
   }, []);
@@ -632,7 +657,9 @@ export function MarketBrowser({
 
   // Sort and filter opportunities
   const sortedOpportunities = useMemo(() => {
-    let filtered = enrichedOpportunities.filter(opp => opp.roi >= minRoiFilter);
+    let filtered = enrichedOpportunities
+      .filter(opp => !dismissedPairs.has(`${opp.marketA.id}-${opp.marketB.id}`))
+      .filter(opp => opp.roi >= minRoiFilter);
     if (selectedCategories.length > 0) {
       filtered = filtered.filter(opp => 
         selectedCategories.includes(opp.marketA.category || "") ||
@@ -661,7 +688,7 @@ export function MarketBrowser({
         default: return b.roi - a.roi;
       }
     });
-  }, [enrichedOpportunities, sortBy, minRoiFilter, selectedCategories]);
+  }, [enrichedOpportunities, sortBy, minRoiFilter, selectedCategories, dismissedPairs]);
 
   // Apply preset
   const applyPreset = (presetId: string) => {
@@ -1094,7 +1121,7 @@ export function MarketBrowser({
                 </div>
                 
                 <span className="text-xs sm:text-sm text-muted-foreground sm:ml-auto">
-                  Showing {sortedOpportunities.length} of {opportunities.length}
+                  Showing {sortedOpportunities.length} of {opportunities.length}{dismissedPairs.size > 0 ? ` (${dismissedPairs.size} hidden)` : ''}
                 </span>
               </div>
               
@@ -1354,17 +1381,8 @@ export function MarketBrowser({
                         {/* Feedback buttons for ML training */}
                         {(() => {
                           const pairKey = `${opp.marketA.id}-${opp.marketB.id}`;
-                          const isRated = ratedPairs.has(pairKey);
+                          const currentVerdict = ratedPairs.get(pairKey);
                           const isPending = feedbackMutation.isPending;
-                          
-                          if (isRated) {
-                            return (
-                              <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                                <Check className="w-3 h-3" />
-                                Rated
-                              </div>
-                            );
-                          }
                           
                           return (
                             <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -1372,35 +1390,48 @@ export function MarketBrowser({
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-10 w-10 min-h-[44px] min-w-[44px] hover:bg-green-500/20"
+                                className={`h-10 w-10 min-h-[44px] min-w-[44px] ${currentVerdict === 'approve' ? 'bg-green-500/30 ring-2 ring-green-500' : 'hover:bg-green-500/20'}`}
                                 onClick={() => feedbackMutation.mutate({ opportunity: opp, verdict: 'approve' })}
                                 disabled={isPending}
                                 title="Good match - same event"
                                 data-testid={`button-approve-${idx}`}
                               >
-                                <ThumbsUp className="w-5 h-5 text-green-600" />
+                                <ThumbsUp className={`w-5 h-5 ${currentVerdict === 'approve' ? 'text-green-400' : 'text-green-600'}`} />
                               </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-10 w-10 min-h-[44px] min-w-[44px] hover:bg-red-500/20"
+                                className={`h-10 w-10 min-h-[44px] min-w-[44px] ${currentVerdict === 'reject' ? 'bg-red-500/30 ring-2 ring-red-500' : 'hover:bg-red-500/20'}`}
                                 onClick={() => feedbackMutation.mutate({ opportunity: opp, verdict: 'reject' })}
                                 disabled={isPending}
                                 title="Not a match - different events"
                                 data-testid={`button-reject-${idx}`}
                               >
-                                <ThumbsDown className="w-5 h-5 text-red-600" />
+                                <ThumbsDown className={`w-5 h-5 ${currentVerdict === 'reject' ? 'text-red-400' : 'text-red-600'}`} />
                               </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-10 w-10 min-h-[44px] min-w-[44px] hover:bg-yellow-500/20"
+                                className={`h-10 w-10 min-h-[44px] min-w-[44px] ${currentVerdict === 'not_binary' ? 'bg-yellow-500/30 ring-2 ring-yellow-500' : 'hover:bg-yellow-500/20'}`}
                                 onClick={() => feedbackMutation.mutate({ opportunity: opp, verdict: 'not_binary' })}
                                 disabled={isPending}
                                 title="Not a binary market (multiple outcomes)"
                                 data-testid={`button-not-binary-${idx}`}
                               >
-                                <HelpCircle className="w-5 h-5 text-yellow-600" />
+                                <HelpCircle className={`w-5 h-5 ${currentVerdict === 'not_binary' ? 'text-yellow-400' : 'text-yellow-600'}`} />
+                              </Button>
+                              <div className="w-px h-6 bg-border mx-1" />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-10 min-h-[44px] px-3 hover:bg-muted text-muted-foreground hover:text-foreground"
+                                onClick={() => feedbackMutation.mutate({ opportunity: opp, verdict: 'not_interested' })}
+                                disabled={isPending}
+                                title="Not interested - hide this opportunity"
+                                data-testid={`button-not-interested-${idx}`}
+                              >
+                                <EyeOff className="w-4 h-4 mr-1" />
+                                <span className="text-xs">Not Interested</span>
                               </Button>
                             </div>
                           );

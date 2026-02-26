@@ -352,21 +352,36 @@ async def submit_feedback(fb: FeedbackCreate):
         )
         existing = await cursor.fetchone()
         if existing:
-            raise HTTPException(status_code=409, detail="Feedback already submitted for this pair")
-
-        await db.execute(
-            """INSERT INTO feedback (market_a_id, market_a_title, market_a_platform,
-               market_b_id, market_b_title, market_b_platform,
-               match_score, match_reason, verdict)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (fb.marketAId, fb.marketATitle, fb.marketAPlatform,
-             fb.marketBId, fb.marketBTitle, fb.marketBPlatform,
-             fb.matchScore, fb.matchReason, fb.verdict),
-        )
-        await db.commit()
+            await db.execute(
+                "UPDATE feedback SET verdict = ?, match_score = ?, match_reason = ? WHERE market_a_id = ? AND market_b_id = ?",
+                (fb.verdict, fb.matchScore, fb.matchReason, fb.marketAId, fb.marketBId),
+            )
+            await db.commit()
+        else:
+            await db.execute(
+                """INSERT INTO feedback (market_a_id, market_a_title, market_a_platform,
+                   market_b_id, market_b_title, market_b_platform,
+                   match_score, match_reason, verdict)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (fb.marketAId, fb.marketATitle, fb.marketAPlatform,
+                 fb.marketBId, fb.marketBTitle, fb.marketBPlatform,
+                 fb.matchScore, fb.matchReason, fb.verdict),
+            )
+            await db.commit()
     finally:
         await db.close()
     return {"success": True}
+
+
+@app.get("/api/match-feedback")
+async def get_feedback():
+    db = await get_db()
+    try:
+        cursor = await db.execute("SELECT market_a_id, market_b_id, verdict FROM feedback")
+        rows = await cursor.fetchall()
+        return [{"marketAId": r[0], "marketBId": r[1], "verdict": r[2]} for r in rows]
+    finally:
+        await db.close()
 
 
 class ArbitrageHistoryCreate(BaseModel):

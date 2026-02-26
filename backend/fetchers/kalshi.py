@@ -50,7 +50,7 @@ def _parse_market(m: dict) -> dict | None:
 
     ticker = m.get("ticker", "")
     event_ticker = m.get("event_ticker", "")
-    market_url = f"https://kalshi.com/markets/{ticker}" if ticker else None
+    market_url = f"https://kalshi.com/markets/{event_ticker}" if event_ticker else None
 
     return {
         "id": f"kalshi_{ticker}",

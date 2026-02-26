@@ -1209,7 +1209,7 @@ export function MarketBrowser({
                       className={`p-3 sm:p-4 rounded-md border ${opp.roi >= 3 ? "border-green-500/50 bg-green-500/5" : ""}`}
                       data-testid={`card-opportunity-${idx}`}
                     >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline">{opp.matchReason || "matched"}</Badge>
@@ -1307,8 +1307,8 @@ export function MarketBrowser({
                             )}
                           </div>
                         </div>
-                        <div className="w-full sm:w-auto sm:text-right shrink-0 space-y-2">
-                          <div className="flex items-center sm:justify-end gap-2">
+                        <div className="w-full md:w-auto md:text-right shrink-0 space-y-2">
+                          <div className="flex items-center md:justify-end gap-2">
                             {/* ROI Trend Sparkline */}
                             {opp.roiHistory && opp.roiHistory.length > 0 && (() => {
                               const maxVal = Math.max(...opp.roiHistory, 0.01); // Guard against 0/negative

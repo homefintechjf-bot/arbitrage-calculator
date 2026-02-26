@@ -69,7 +69,16 @@ async def fetch_polymarket_markets(limit: int = 50000) -> List[Dict[str, Any]]:
                         except (ValueError, TypeError):
                             volume = 0
 
-                        market_url = f"https://polymarket.com/event/{m.get('slug', '')}" if m.get("slug") else None
+                        event_slug = None
+                        events_list = m.get("events", [])
+                        if events_list and isinstance(events_list, list):
+                            for ev in events_list:
+                                if isinstance(ev, dict) and ev.get("slug"):
+                                    event_slug = ev["slug"]
+                                    break
+                        if not event_slug:
+                            event_slug = m.get("slug", "")
+                        market_url = f"https://polymarket.com/event/{event_slug}" if event_slug else None
 
                         market = {
                             "id": f"poly_{m.get('id', '')}",

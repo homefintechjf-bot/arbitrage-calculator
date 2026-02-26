@@ -15,6 +15,15 @@ STOP_WORDS = {
     "yes", "no", "market", "contract", "event", "question",
 }
 
+GENERIC_KEYWORDS = {
+    "price", "above", "below", "over", "under", "more", "less", "than",
+    "end", "year", "2025", "2026", "2027", "next", "win", "winner",
+    "rate", "percent", "number", "total", "average", "many", "much",
+    "day", "week", "month", "january", "february", "march", "april",
+    "may", "june", "july", "august", "september", "october", "november", "december",
+    "first", "second", "third", "last", "any", "new", "most", "least",
+}
+
 
 def normalize_text(text: str) -> str:
     text = text.lower().strip()
@@ -26,6 +35,11 @@ def normalize_text(text: str) -> str:
 def extract_keywords(text: str) -> set:
     normalized = normalize_text(text)
     return set(normalized.split())
+
+
+def extract_significant_keywords(text: str) -> set:
+    normalized = normalize_text(text)
+    return set(w for w in normalized.split() if w not in GENERIC_KEYWORDS)
 
 
 def compute_similarity(title_a: str, title_b: str) -> Tuple[float, str]:
@@ -50,6 +64,14 @@ def compute_similarity(title_a: str, title_b: str) -> Tuple[float, str]:
         return combined, "; ".join(reason_parts) if reason_parts else "semantic"
 
     return combined, "low"
+
+
+def compute_similarity_fast(keywords_a: set, keywords_b: set) -> float:
+    if not keywords_a or not keywords_b:
+        return 0
+    intersection = keywords_a & keywords_b
+    union = keywords_a | keywords_b
+    return len(intersection) / len(union) if union else 0
 
 
 def estimate_fee(platform: str, price: float) -> float:
@@ -135,26 +157,36 @@ def find_arbitrage_pairs(
             total_brute += len(by_platform[platforms[i]]) * len(by_platform[platforms[j]])
     
     logger.info(f"Matcher: {len(platforms)} platforms, {sum(len(v) for v in by_platform.values())} markets, {total_brute:,} brute-force pairs")
-    logger.info(f"Using keyword index to reduce comparisons...")
+
+    all_keywords_cache = {}
+    sig_keywords_cache = {}
+    for plat in platforms:
+        for idx, m in enumerate(by_platform[plat]):
+            key = (plat, idx)
+            all_keywords_cache[key] = extract_keywords(m["title"])
+            sig_keywords_cache[key] = extract_significant_keywords(m["title"])
+
+    logger.info(f"Using keyword index with significance filtering...")
 
     candidate_pairs = set()
     for i in range(len(platforms)):
         for j in range(i + 1, len(platforms)):
             pa, pb = platforms[i], platforms[j]
-            markets_a = by_platform[pa]
             markets_b = by_platform[pb]
 
-            kw_index_b = defaultdict(list)
-            for idx_b, mb in enumerate(markets_b):
-                for kw in extract_keywords(mb["title"]):
-                    kw_index_b[kw].append(idx_b)
+            sig_index_b = defaultdict(list)
+            for idx_b in range(len(markets_b)):
+                for kw in sig_keywords_cache[(pb, idx_b)]:
+                    sig_index_b[kw].append(idx_b)
 
-            for idx_a, ma in enumerate(markets_a):
-                keywords_a = extract_keywords(ma["title"])
+            for idx_a in range(len(by_platform[pa])):
+                sig_kw_a = sig_keywords_cache[(pa, idx_a)]
+                if not sig_kw_a:
+                    continue
                 matched_b_indices = set()
-                for kw in keywords_a:
-                    if kw in kw_index_b:
-                        matched_b_indices.update(kw_index_b[kw])
+                for kw in sig_kw_a:
+                    if kw in sig_index_b:
+                        matched_b_indices.update(sig_index_b[kw])
                 for idx_b in matched_b_indices:
                     candidate_pairs.add((pa, pb, idx_a, idx_b))
 
@@ -164,17 +196,31 @@ def find_arbitrage_pairs(
     if on_progress:
         on_progress(0, total_comparisons, 0)
 
+    MIN_JACCARD_PREFILTER = 0.15
+
     pairs = []
     completed = 0
+    skipped_jaccard = 0
 
     for pa, pb, idx_a, idx_b in candidate_pairs:
+        completed += 1
+
+        kw_a = all_keywords_cache[(pa, idx_a)]
+        kw_b = all_keywords_cache[(pb, idx_b)]
+
+        jaccard = compute_similarity_fast(kw_a, kw_b)
+        if jaccard < MIN_JACCARD_PREFILTER:
+            skipped_jaccard += 1
+            if on_progress and completed % 5000 == 0:
+                on_progress(completed, total_comparisons, len(pairs))
+            continue
+
         ma = by_platform[pa][idx_a]
         mb = by_platform[pb][idx_b]
-        completed += 1
 
         sim_score, reason = compute_similarity(ma["title"], mb["title"])
         if sim_score < min_similarity:
-            if on_progress and completed % 200 == 0:
+            if on_progress and completed % 5000 == 0:
                 on_progress(completed, total_comparisons, len(pairs))
             continue
 
@@ -201,11 +247,13 @@ def find_arbitrage_pairs(
         }
         pairs.append(pair)
 
-        if on_progress and completed % 200 == 0:
+        if on_progress and completed % 5000 == 0:
             on_progress(completed, total_comparisons, len(pairs))
 
     if on_progress:
         on_progress(total_comparisons, total_comparisons, len(pairs))
+
+    logger.info(f"Matcher: {skipped_jaccard:,} skipped by Jaccard pre-filter, {len(pairs)} pairs found")
 
     pairs.sort(key=lambda p: (
         -p["matchScore"],

@@ -99,10 +99,10 @@ async def fetch_polymarket_markets(limit: int = 50000) -> List[Dict[str, Any]]:
                 if len(raw_markets) < PAGE_SIZE:
                     break
 
-                if pages_fetched % 10 == 0:
-                    await asyncio.sleep(1.0)
+                if pages_fetched % 20 == 0:
+                    await asyncio.sleep(0.5)
                 else:
-                    await asyncio.sleep(0.15)
+                    await asyncio.sleep(0.05)
 
     except Exception as e:
         logger.error(f"Polymarket fetch error: {e}")

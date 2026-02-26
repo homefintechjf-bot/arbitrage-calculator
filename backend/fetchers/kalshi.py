@@ -117,7 +117,9 @@ async def fetch_kalshi_markets(limit: int = 10000) -> List[Dict[str, Any]]:
 
                 pages_fetched += 1
                 cursor = data.get("cursor")
-                logger.info(f"Kalshi page {pages_fetched}: {len(raw_markets)} raw, +{page_binary} binary (total: {len(markets)})")
+
+                if pages_fetched % 50 == 0:
+                    logger.info(f"Kalshi page {pages_fetched}: {len(raw_markets)} raw, +{page_binary} binary (total: {len(markets)})")
 
                 if not cursor or len(raw_markets) < PAGE_SIZE:
                     break
@@ -130,10 +132,10 @@ async def fetch_kalshi_markets(limit: int = 10000) -> List[Dict[str, Any]]:
                     logger.info(f"Kalshi: stopping early after {consecutive_empty} consecutive pages with 0 binary markets")
                     break
 
-                if pages_fetched % 10 == 0:
-                    await asyncio.sleep(1.0)
+                if pages_fetched % 20 == 0:
+                    await asyncio.sleep(0.5)
                 else:
-                    await asyncio.sleep(0.15)
+                    await asyncio.sleep(0.05)
 
     except Exception as e:
         logger.error(f"Kalshi fetch error: {e}")

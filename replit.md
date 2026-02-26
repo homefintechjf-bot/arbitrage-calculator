@@ -34,7 +34,13 @@ Full-stack prediction market arbitrage finder that fetches live data from Kalshi
 - `shared/schema.ts` - TypeScript interfaces
 
 ## Matching Algorithm
-Uses inverted keyword index to reduce cross-platform comparisons from ~216M brute-force to ~26M candidate pairs. Combines SequenceMatcher (40%) + Jaccard similarity (60%) for scoring. Min threshold: 35%.
+Uses inverted keyword index with significance keyword filtering to reduce ~200M brute-force pairs to ~13M candidates. Jaccard pre-filter (≥0.15) skips weak pairs before expensive SequenceMatcher. Combines SequenceMatcher (40%) + Jaccard (60%) for scoring. Min threshold: 35%. Matcher runs in ThreadPoolExecutor to avoid blocking async event loop; progress updates use call_soon_threadsafe for thread safety.
+
+## Performance
+- All 3 platforms fetch in parallel via asyncio.gather() — Kalshi (~2min) overlaps with Polymarket (~1min) and PredictIt (instant)
+- Keyword index: 200M → 13M candidates (93% reduction)
+- Jaccard pre-filter: 13M → ~900K full comparisons (12.4M skipped)
+- Reduced per-page delays: 0.05s between pages, 0.5s every 20 pages
 
 ## Database
 SQLite via aiosqlite. Tables: markets, matched_pairs, scan_state, watchlist.

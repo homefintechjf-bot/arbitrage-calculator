@@ -50,7 +50,14 @@ def _parse_market(m: dict) -> dict | None:
 
     ticker = m.get("ticker", "")
     event_ticker = m.get("event_ticker", "")
-    market_url = f"https://kalshi.com/markets/{event_ticker}" if event_ticker else None
+    title_text = m.get("title", "")
+    if event_ticker:
+        market_url = f"https://kalshi.com/markets/{event_ticker}"
+    elif title_text:
+        from urllib.parse import quote
+        market_url = f"https://kalshi.com/browse?q={quote(title_text)}"
+    else:
+        market_url = None
 
     return {
         "id": f"kalshi_{ticker}",

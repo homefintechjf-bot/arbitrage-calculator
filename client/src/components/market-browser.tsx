@@ -1235,83 +1235,89 @@ export function MarketBrowser({
                               </Badge>
                             )}
                           </div>
-                          <div className="space-y-3">
+                          <div className="space-y-3 mt-2">
                             {opp.legs && opp.legs.length > 0 ? (
                               opp.legs.map((leg, legIdx) => (
-                                <div key={legIdx} className="space-y-1 p-2 rounded bg-muted/30">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge className={platformColors[leg.platform] || "bg-muted text-foreground"}>
+                                <div key={legIdx} className="p-3 rounded-lg border bg-card">
+                                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                                    <Badge className={`text-sm px-2.5 py-0.5 ${platformColors[leg.platform] || "bg-muted text-foreground"}`}>
                                       {leg.platform}
                                     </Badge>
-                                    <span className="font-mono font-bold text-sm">
+                                    <span className="font-mono font-bold text-base">
                                       {(leg.price * 100).toFixed(0)}c {leg.side}
                                     </span>
-                                    {leg.allocation < 1 && (
-                                      <Badge variant="outline" className="text-xs font-mono">
-                                        {(leg.allocation * 100).toFixed(0)}% alloc
-                                      </Badge>
-                                    )}
                                     {leg.fee > 0 && (
                                       <span className="text-xs text-amber-600 dark:text-amber-400 font-mono">
                                         fee: {(leg.fee * 100).toFixed(1)}c
                                       </span>
                                     )}
+                                    {leg.allocation < 1 && (
+                                      <Badge variant="outline" className="text-xs font-mono">
+                                        {(leg.allocation * 100).toFixed(0)}% alloc
+                                      </Badge>
+                                    )}
                                   </div>
-                                  {leg.marketUrl ? (
+                                  <p className="text-base leading-relaxed font-medium text-foreground break-words mb-1">
+                                    {leg.title}
+                                  </p>
+                                  {leg.marketUrl && (
                                     <a
                                       href={leg.marketUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="block text-sm leading-relaxed text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 break-words"
+                                      className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
                                       data-testid={`link-leg-${idx}-${legIdx}`}
                                     >
-                                      {leg.title}
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      View on {leg.platform}
                                     </a>
-                                  ) : (
-                                    <p className="text-sm leading-relaxed text-foreground break-words">{leg.title}</p>
                                   )}
                                 </div>
                               ))
                             ) : (
                               <>
-                                <div className="space-y-1 p-2 rounded bg-muted/30">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge className={platformColors[opp.marketA.platform]}>
+                                <div className="p-3 rounded-lg border bg-card">
+                                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                                    <Badge className={`text-sm px-2.5 py-0.5 ${platformColors[opp.marketA.platform]}`}>
                                       {opp.marketA.platform}
                                     </Badge>
-                                    <span className="font-mono font-bold text-sm">{(opp.marketA.yesPrice * 100).toFixed(0)}c YES</span>
+                                    <span className="font-mono font-bold text-base">{(opp.marketA.yesPrice * 100).toFixed(0)}c YES</span>
                                     {opp.marketA.volume > 0 && (
                                       <span className="text-xs text-muted-foreground font-mono">vol: {opp.marketA.volume.toLocaleString()}</span>
                                     )}
                                   </div>
-                                  {opp.marketA.marketUrl ? (
+                                  <p className="text-base leading-relaxed font-medium text-foreground break-words mb-1">
+                                    {opp.marketA.title}
+                                  </p>
+                                  {opp.marketA.marketUrl && (
                                     <a href={opp.marketA.marketUrl} target="_blank" rel="noopener noreferrer"
-                                      className="block text-sm leading-relaxed text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 break-words"
+                                      className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
                                       data-testid={`link-marketA-${idx}`}>
-                                      {opp.marketA.title}
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      View on {opp.marketA.platform}
                                     </a>
-                                  ) : (
-                                    <p className="text-sm leading-relaxed text-foreground break-words">{opp.marketA.title}</p>
                                   )}
                                 </div>
-                                <div className="space-y-1 p-2 rounded bg-muted/30">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Badge className={platformColors[opp.marketB.platform]}>
+                                <div className="p-3 rounded-lg border bg-card">
+                                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                                    <Badge className={`text-sm px-2.5 py-0.5 ${platformColors[opp.marketB.platform]}`}>
                                       {opp.marketB.platform}
                                     </Badge>
-                                    <span className="font-mono font-bold text-sm">{(opp.marketB.noPrice * 100).toFixed(0)}c NO</span>
+                                    <span className="font-mono font-bold text-base">{(opp.marketB.noPrice * 100).toFixed(0)}c NO</span>
                                     {opp.marketB.volume > 0 && (
                                       <span className="text-xs text-muted-foreground font-mono">vol: {opp.marketB.volume.toLocaleString()}</span>
                                     )}
                                   </div>
-                                  {opp.marketB.marketUrl ? (
+                                  <p className="text-base leading-relaxed font-medium text-foreground break-words mb-1">
+                                    {opp.marketB.title}
+                                  </p>
+                                  {opp.marketB.marketUrl && (
                                     <a href={opp.marketB.marketUrl} target="_blank" rel="noopener noreferrer"
-                                      className="block text-sm leading-relaxed text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 break-words"
+                                      className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
                                       data-testid={`link-marketB-${idx}`}>
-                                      {opp.marketB.title}
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                      View on {opp.marketB.platform}
                                     </a>
-                                  ) : (
-                                    <p className="text-sm leading-relaxed text-foreground break-words">{opp.marketB.title}</p>
                                   )}
                                 </div>
                               </>

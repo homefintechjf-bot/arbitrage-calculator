@@ -76,8 +76,6 @@ async def fetch_polymarket_markets(limit: int = 50000) -> List[Dict[str, Any]]:
                                 if isinstance(ev, dict) and ev.get("slug"):
                                     event_slug = ev["slug"]
                                     break
-                        if not event_slug:
-                            event_slug = m.get("slug", "")
                         market_url = f"https://polymarket.com/event/{event_slug}" if event_slug else None
 
                         market = {

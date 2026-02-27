@@ -1235,10 +1235,10 @@ export function MarketBrowser({
                               </Badge>
                             )}
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {opp.legs && opp.legs.length > 0 ? (
                               opp.legs.map((leg, legIdx) => (
-                                <div key={legIdx} className="space-y-0.5">
+                                <div key={legIdx} className="space-y-1 p-2 rounded bg-muted/30">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Badge className={platformColors[leg.platform] || "bg-muted text-foreground"}>
                                       {leg.platform}
@@ -1256,52 +1256,63 @@ export function MarketBrowser({
                                         fee: {(leg.fee * 100).toFixed(1)}c
                                       </span>
                                     )}
-                                    {leg.marketUrl && (
-                                      <a
-                                        href={leg.marketUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 dark:text-blue-400 underline text-xs hover:text-blue-800 dark:hover:text-blue-300"
-                                        data-testid={`link-leg-${idx}-${legIdx}`}
-                                      >
-                                        {leg.platform}
-                                      </a>
-                                    )}
                                   </div>
-                                  <p className="text-sm leading-relaxed text-muted-foreground">{leg.title}</p>
+                                  {leg.marketUrl ? (
+                                    <a
+                                      href={leg.marketUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="block text-sm leading-relaxed text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 break-words"
+                                      data-testid={`link-leg-${idx}-${legIdx}`}
+                                    >
+                                      {leg.title}
+                                    </a>
+                                  ) : (
+                                    <p className="text-sm leading-relaxed text-foreground break-words">{leg.title}</p>
+                                  )}
                                 </div>
                               ))
                             ) : (
                               <>
-                                <div className="space-y-0.5">
+                                <div className="space-y-1 p-2 rounded bg-muted/30">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Badge className={platformColors[opp.marketA.platform]}>
                                       {opp.marketA.platform}
                                     </Badge>
                                     <span className="font-mono font-bold text-sm">{(opp.marketA.yesPrice * 100).toFixed(0)}c YES</span>
-                                    {opp.marketA.marketUrl && (
-                                      <a href={opp.marketA.marketUrl} target="_blank" rel="noopener noreferrer"
-                                        className="text-blue-600 dark:text-blue-400 underline text-xs">
-                                        {opp.marketA.platform}
-                                      </a>
+                                    {opp.marketA.volume > 0 && (
+                                      <span className="text-xs text-muted-foreground font-mono">vol: {opp.marketA.volume.toLocaleString()}</span>
                                     )}
                                   </div>
-                                  <p className="text-sm leading-relaxed text-muted-foreground">{opp.marketA.title}</p>
+                                  {opp.marketA.marketUrl ? (
+                                    <a href={opp.marketA.marketUrl} target="_blank" rel="noopener noreferrer"
+                                      className="block text-sm leading-relaxed text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 break-words"
+                                      data-testid={`link-marketA-${idx}`}>
+                                      {opp.marketA.title}
+                                    </a>
+                                  ) : (
+                                    <p className="text-sm leading-relaxed text-foreground break-words">{opp.marketA.title}</p>
+                                  )}
                                 </div>
-                                <div className="space-y-0.5">
+                                <div className="space-y-1 p-2 rounded bg-muted/30">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <Badge className={platformColors[opp.marketB.platform]}>
                                       {opp.marketB.platform}
                                     </Badge>
                                     <span className="font-mono font-bold text-sm">{(opp.marketB.noPrice * 100).toFixed(0)}c NO</span>
-                                    {opp.marketB.marketUrl && (
-                                      <a href={opp.marketB.marketUrl} target="_blank" rel="noopener noreferrer"
-                                        className="text-blue-600 dark:text-blue-400 underline text-xs">
-                                        {opp.marketB.platform}
-                                      </a>
+                                    {opp.marketB.volume > 0 && (
+                                      <span className="text-xs text-muted-foreground font-mono">vol: {opp.marketB.volume.toLocaleString()}</span>
                                     )}
                                   </div>
-                                  <p className="text-sm leading-relaxed text-muted-foreground">{opp.marketB.title}</p>
+                                  {opp.marketB.marketUrl ? (
+                                    <a href={opp.marketB.marketUrl} target="_blank" rel="noopener noreferrer"
+                                      className="block text-sm leading-relaxed text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300 break-words"
+                                      data-testid={`link-marketB-${idx}`}>
+                                      {opp.marketB.title}
+                                    </a>
+                                  ) : (
+                                    <p className="text-sm leading-relaxed text-foreground break-words">{opp.marketB.title}</p>
+                                  )}
                                 </div>
                               </>
                             )}

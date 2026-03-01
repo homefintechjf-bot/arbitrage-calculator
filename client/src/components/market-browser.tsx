@@ -197,6 +197,98 @@ const platformColors: Record<string, string> = {
   PredictIt: "bg-green-500/10 text-green-700 dark:text-green-400",
 };
 
+const platformAccent: Record<string, { border: string; bg: string; text: string; ring: string }> = {
+  Kalshi: { border: "border-l-blue-500", bg: "bg-blue-500/5", text: "text-blue-700 dark:text-blue-400", ring: "ring-blue-500/20" },
+  Polymarket: { border: "border-l-purple-500", bg: "bg-purple-500/5", text: "text-purple-700 dark:text-purple-400", ring: "ring-purple-500/20" },
+  PredictIt: { border: "border-l-green-500", bg: "bg-green-500/5", text: "text-green-700 dark:text-green-400", ring: "ring-green-500/20" },
+};
+
+function formatExpiry(dateStr?: string | null): string | null {
+  if (!dateStr) return null;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
+  } catch { return null; }
+}
+
+function LegSection({ leg, market, oppIdx, legIdx }: {
+  leg: ComboLeg;
+  market: StandardizedMarket;
+  oppIdx: number;
+  legIdx: number;
+}) {
+  const accent = platformAccent[leg.platform] || platformAccent.Kalshi;
+  const yesPercent = market.yesPrice * 100;
+  const noPercent = market.noPrice * 100;
+  const buyPrice = leg.price * 100;
+  const expiry = formatExpiry(market.endDate);
+
+  return (
+    <div className={`border-l-4 ${accent.border} ${accent.bg} rounded-r-lg p-3 sm:p-4 space-y-2.5`}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className={`text-sm font-bold uppercase tracking-wide ${accent.text}`} data-testid={`text-platform-${oppIdx}-${legIdx}`}>
+          {leg.platform}
+        </span>
+        <Badge variant="secondary" className="font-mono text-sm font-bold px-2.5 py-1 shrink-0">
+          Buy {leg.side} {buyPrice.toFixed(0)}¢
+        </Badge>
+      </div>
+
+      <p className="text-[15px] sm:text-base leading-relaxed font-medium text-foreground break-words" data-testid={`text-question-${oppIdx}-${legIdx}`}>
+        {leg.title}
+      </p>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-0.5">
+            <span className="text-xs font-medium text-green-700 dark:text-green-400">Yes</span>
+            <span className="text-sm font-bold font-mono text-green-700 dark:text-green-400">{yesPercent.toFixed(0)}¢</span>
+          </div>
+          <div className="flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-0.5">
+            <span className="text-xs font-medium text-red-700 dark:text-red-400">No</span>
+            <span className="text-sm font-bold font-mono text-red-700 dark:text-red-400">{noPercent.toFixed(0)}¢</span>
+          </div>
+        </div>
+        {leg.fee > 0 && (
+          <span className="text-xs text-amber-600 dark:text-amber-400 font-mono" data-testid={`text-fee-${oppIdx}-${legIdx}`}>
+            fee {(leg.fee * 100).toFixed(1)}¢
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 flex-wrap text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 flex-wrap">
+          {leg.volume > 0 && (
+            <span className="flex items-center gap-1 font-mono">
+              <BarChart3 className="w-3 h-3" />
+              {leg.volume.toLocaleString()}
+            </span>
+          )}
+          {expiry && (
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {expiry}
+            </span>
+          )}
+        </div>
+        {leg.marketUrl && (
+          <a
+            href={leg.marketUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 underline underline-offset-2 decoration-blue-600/40 hover:decoration-blue-600 hover:text-blue-700 dark:hover:text-blue-300 font-medium whitespace-nowrap"
+            data-testid={`link-leg-${oppIdx}-${legIdx}`}
+          >
+            {leg.platform}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AllMarketsGrid({ markets, platformColors }: { markets: StandardizedMarket[]; platformColors: Record<string, string> }) {
   const { pinLeft, pinRight, leftMarket, rightMarket } = useComparison();
   const { toast } = useToast();
@@ -1237,89 +1329,44 @@ export function MarketBrowser({
                           </div>
                           <div className="space-y-3 mt-2">
                             {opp.legs && opp.legs.length > 0 ? (
-                              opp.legs.map((leg, legIdx) => (
-                                <div key={legIdx} className="p-3 rounded-lg border bg-card">
-                                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                                    <Badge className={`text-sm px-2.5 py-0.5 ${platformColors[leg.platform] || "bg-muted text-foreground"}`}>
-                                      {leg.platform}
-                                    </Badge>
-                                    <span className="font-mono font-bold text-base">
-                                      {(leg.price * 100).toFixed(0)}c {leg.side}
-                                    </span>
-                                    {leg.fee > 0 && (
-                                      <span className="text-xs text-amber-600 dark:text-amber-400 font-mono">
-                                        fee: {(leg.fee * 100).toFixed(1)}c
-                                      </span>
-                                    )}
-                                    {leg.allocation < 1 && (
-                                      <Badge variant="outline" className="text-xs font-mono">
-                                        {(leg.allocation * 100).toFixed(0)}% alloc
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="text-base leading-relaxed font-medium text-foreground break-words mb-1">
-                                    {leg.title}
-                                  </p>
-                                  {leg.marketUrl && (
-                                    <a
-                                      href={leg.marketUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
-                                      data-testid={`link-leg-${idx}-${legIdx}`}
-                                    >
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                      View on {leg.platform}
-                                    </a>
-                                  )}
-                                </div>
-                              ))
+                              opp.legs.map((leg, legIdx) => {
+                                const market = legIdx === 0 ? opp.marketA : opp.marketB;
+                                return <LegSection key={legIdx} leg={leg} market={market} oppIdx={idx} legIdx={legIdx} />;
+                              })
                             ) : (
                               <>
-                                <div className="p-3 rounded-lg border bg-card">
-                                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                                    <Badge className={`text-sm px-2.5 py-0.5 ${platformColors[opp.marketA.platform]}`}>
-                                      {opp.marketA.platform}
-                                    </Badge>
-                                    <span className="font-mono font-bold text-base">{(opp.marketA.yesPrice * 100).toFixed(0)}c YES</span>
-                                    {opp.marketA.volume > 0 && (
-                                      <span className="text-xs text-muted-foreground font-mono">vol: {opp.marketA.volume.toLocaleString()}</span>
-                                    )}
-                                  </div>
-                                  <p className="text-base leading-relaxed font-medium text-foreground break-words mb-1">
-                                    {opp.marketA.title}
-                                  </p>
-                                  {opp.marketA.marketUrl && (
-                                    <a href={opp.marketA.marketUrl} target="_blank" rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
-                                      data-testid={`link-marketA-${idx}`}>
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                      View on {opp.marketA.platform}
-                                    </a>
-                                  )}
-                                </div>
-                                <div className="p-3 rounded-lg border bg-card">
-                                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                                    <Badge className={`text-sm px-2.5 py-0.5 ${platformColors[opp.marketB.platform]}`}>
-                                      {opp.marketB.platform}
-                                    </Badge>
-                                    <span className="font-mono font-bold text-base">{(opp.marketB.noPrice * 100).toFixed(0)}c NO</span>
-                                    {opp.marketB.volume > 0 && (
-                                      <span className="text-xs text-muted-foreground font-mono">vol: {opp.marketB.volume.toLocaleString()}</span>
-                                    )}
-                                  </div>
-                                  <p className="text-base leading-relaxed font-medium text-foreground break-words mb-1">
-                                    {opp.marketB.title}
-                                  </p>
-                                  {opp.marketB.marketUrl && (
-                                    <a href={opp.marketB.marketUrl} target="_blank" rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300"
-                                      data-testid={`link-marketB-${idx}`}>
-                                      <ExternalLink className="w-3.5 h-3.5" />
-                                      View on {opp.marketB.platform}
-                                    </a>
-                                  )}
-                                </div>
+                                <LegSection
+                                  leg={{
+                                    platform: opp.marketA.platform,
+                                    marketId: opp.marketA.id,
+                                    title: opp.marketA.title,
+                                    side: "YES",
+                                    price: opp.marketA.yesPrice,
+                                    fee: 0,
+                                    volume: opp.marketA.volume,
+                                    marketUrl: opp.marketA.marketUrl,
+                                    allocation: 1.0,
+                                  }}
+                                  market={opp.marketA}
+                                  oppIdx={idx}
+                                  legIdx={0}
+                                />
+                                <LegSection
+                                  leg={{
+                                    platform: opp.marketB.platform,
+                                    marketId: opp.marketB.id,
+                                    title: opp.marketB.title,
+                                    side: "NO",
+                                    price: opp.marketB.noPrice,
+                                    fee: 0,
+                                    volume: opp.marketB.volume,
+                                    marketUrl: opp.marketB.marketUrl,
+                                    allocation: 1.0,
+                                  }}
+                                  market={opp.marketB}
+                                  oppIdx={idx}
+                                  legIdx={1}
+                                />
                               </>
                             )}
                           </div>
@@ -1358,11 +1405,9 @@ export function MarketBrowser({
                             }
                             return null;
                           })()}
-                          <p className="text-sm text-muted-foreground">
-                            Cost: {((opp.totalCost || opp.combinedYesCost) * 100).toFixed(0)}c
-                            {opp.fees ? ` (${(opp.fees * 100).toFixed(1)}c fees)` : ""}
-                            {" | Vol: "}
-                            {((opp.marketA.volume + opp.marketB.volume) / 2).toLocaleString()}
+                          <p className="text-sm text-muted-foreground font-mono">
+                            Cost: {((opp.totalCost || opp.combinedYesCost) * 100).toFixed(0)}¢
+                            {opp.fees ? ` (incl. ${(opp.fees * 100).toFixed(1)}¢ fees)` : ""}
                           </p>
                           <div className="flex items-center gap-2">
                             <Button

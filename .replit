@@ -49,3 +49,4 @@ outputType = "webview"
 [agent]
 stack = "MOCKUP_JS"
 mockupState = "FULLSTACK"
+integrations = ["github:1.0.0"]
